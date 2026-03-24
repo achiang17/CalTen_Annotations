@@ -1,0 +1,4 @@
+{
+  "actions": ["forehand", "backhand", "serve", "volley", "overhead", "drop_shot", "lob"],
+  "players": ["P1", "P2", "P3", "P4"]
+}

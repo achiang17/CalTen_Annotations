@@ -1,0 +1,24 @@
+{
+  "02_25_2026_16_30_court1": {
+    "label": "02_25_2026_16_30_court1",
+    "annotations": "",
+    "videos": {
+      "W1" : "https://www.dropbox.com/scl/fi/nizjkmarqopa971ox15gj/02_25_2026_16_26_53_000_5_W_02_18_32_06_375.MOV?rlkey=78m8mrnctczdux7dcdgt9zhq7&st=gtp7x48f&raw=1",
+      "W2" : "https://www.dropbox.com/scl/fi/3rfgsn54z239tmphnk88d/02_25_2026_16_27_25_000_5_W_01_16_32_23_111.MOV?rlkey=w1nazdx3hyf4zelc6ve5ovacc&st=dmy2az8e&raw=1",
+      "E1" : "https://www.dropbox.com/scl/fi/2sra3afg4cqpdropgvbi0/02_25_2026_16_28_27_000_5_E_03_18_32_47_493.MOV?rlkey=2di3yj5116khwj6iqrc66cmgu&st=xpmrm7av&raw=1",
+      "E2" : "https://www.dropbox.com/scl/fi/hkzidh993jycywyb18gbx/02_25_2026_16_29_29_000_5_E_04_18_22_21_320.MOV?rlkey=qwh5sbb5bxyoxc8eqb43jeq22&st=qp28jrgn&raw=1"
+    }
+  },
+
+  "03_22_2026_11_00_court1" : {
+    "label": "03_22_2026_11_00_court1",
+    "annotations": "",
+    "videos": {
+      "SE1" : "https://www.dropbox.com/scl/fi/fs4dsm26jsjggsrwhbv2n/03_22_2026_11_17_10_000_1_SE_02_12_23_54_086.MOV?rlkey=yhfe16o1mg23ubpykyai4xkxe&st=a0saap9z&raw=1",
+      "E1" : "https://www.dropbox.com/scl/fi/idmclp3u88c8otas5l58j/03_22_2026_11_20_21_000_1_E_01_12_46_55_490.MOV?rlkey=7vsdn7g73u8lrfis6m806ryr6&st=he0inwob&raw=1",
+      "SW1" : "https://www.dropbox.com/scl/fi/n92vofk6nz1tssdohk7sx/03_22_2026_11_20_42_000_1_SW_03_12_39_51_481.MOV?rlkey=vwp5lnvacxf5muxkkmib4gjwx&st=7u9zbcjs&raw=1",
+      "W1" : "https://www.dropbox.com/scl/fi/wqkyzxjasefv3lixbhg0l/03_22_2026_11_21_01_000_1_W_04_12_46_19_520.MOV?rlkey=1laswnfoeim0byb3ke1zu6o7g&st=mhii033b&raw=1"
+
+    }
+  }
+}

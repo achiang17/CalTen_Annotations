@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CalTen Annotations</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <h1>CalTen Annotations</h1>
+  </header>
+
+  <div class="page-body">
+
+    <!-- Player Roster Setup -->
+    <section style="max-width: 640px; margin-bottom: 32px;">
+      <p class="section-title">Player Roster</p>
+      <div class="card roster-panel">
+        <table class="roster-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Player Name</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="roster-body">
+            <!-- Rows injected by app.js -->
+          </tbody>
+        </table>
+        <div class="roster-actions">
+          <button class="btn btn-secondary" id="btn-add-player">+ Add Player</button>
+          <div class="roster-upload">
+            <label for="csv-upload" class="btn btn-secondary">Upload CSV</label>
+            <input type="file" id="csv-upload" accept=".csv" style="display: none;" />
+            <span class="upload-hint">CSV format: player_id, player_name</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Session Browser -->
+    <section style="max-width: 640px;">
+      <p class="section-title">Sessions</p>
+      <div id="folder-list" class="folder-list">
+        <div class="empty-state">Loading sessions…</div>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

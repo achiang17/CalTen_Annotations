@@ -1,0 +1,690 @@
+/* ============================================================
+   CSS Custom Properties
+   ============================================================ */
+:root {
+  --color-bg:        #ffffff;
+  --color-surface:   #f5f5f5;
+  --color-border:    #e0e0e0;
+  --color-text:      #1a1a1a;
+  --color-muted:     #6b7280;
+  --color-accent:    #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-danger:    #dc2626;
+
+  /* Action color palette — subtle left-border tints */
+  --action-forehand:  #dbeafe;
+  --action-backhand:  #fef9c3;
+  --action-serve:     #dcfce7;
+  --action-volley:    #fce7f3;
+  --action-overhead:  #ede9fe;
+  --action-drop_shot: #ffedd5;
+  --action-lob:       #e0f2fe;
+
+  --action-forehand-border:  #2563eb;
+  --action-backhand-border:  #ca8a04;
+  --action-serve-border:     #16a34a;
+  --action-volley-border:    #db2777;
+  --action-overhead-border:  #7c3aed;
+  --action-drop_shot-border: #ea580c;
+  --action-lob-border:       #0284c7;
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius: 6px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.10);
+}
+
+/* ============================================================
+   Reset & Base
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  line-height: 1.5;
+  min-width: 1100px;
+}
+
+a { color: var(--color-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ============================================================
+   Header / Nav
+   ============================================================ */
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.site-header h1 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.site-header .back-link {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.site-header .back-link:hover { color: var(--color-accent); }
+
+/* ============================================================
+   Layout Utilities
+   ============================================================ */
+.page-body {
+  padding: 24px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  margin-bottom: 12px;
+}
+
+/* ============================================================
+   Card
+   ============================================================ */
+.card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.btn-primary:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+
+.btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+.btn-secondary:hover { background: #ebebeb; }
+
+.btn-danger {
+  background: transparent;
+  color: var(--color-danger);
+  border-color: transparent;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.btn-danger:hover { background: #fee2e2; }
+
+.btn-speed {
+  background: var(--color-surface);
+  color: var(--color-muted);
+  border-color: var(--color-border);
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.btn-speed.active {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+/* ============================================================
+   Form Inputs
+   ============================================================ */
+input[type="text"],
+input[type="search"],
+select,
+textarea {
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+
+input[type="text"]:focus,
+input[type="search"]:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-accent);
+}
+
+textarea { resize: vertical; min-height: 56px; }
+
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-muted);
+  margin-bottom: 4px;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+/* ============================================================
+   Index Page — Player Roster Panel
+   ============================================================ */
+.roster-panel {
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+
+.roster-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+  padding: 0 0 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.roster-table th:last-child {
+  width: 40px;
+}
+
+.roster-table td {
+  padding: 6px 4px 6px 0;
+  border-bottom: 1px solid var(--color-surface);
+  vertical-align: middle;
+}
+
+.roster-table td:first-child {
+  width: 100px;
+}
+
+.roster-table td:last-child {
+  width: 40px;
+  text-align: center;
+}
+
+.roster-table .player-id-input {
+  max-width: 80px;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.roster-table .player-name-input {
+  max-width: 280px;
+}
+
+.roster-table .btn-remove-player {
+  padding: 2px 6px;
+  font-size: 11px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.roster-table tr:hover .btn-remove-player {
+  opacity: 1;
+}
+
+.roster-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.roster-upload {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-hint {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+/* ============================================================
+   Index Page — Folder / Session Browser
+   ============================================================ */
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.folder-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.folder-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.08);
+}
+
+.folder-card-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.folder-card-key {
+  font-size: 11px;
+  color: var(--color-muted);
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+}
+
+.folder-card-arrow {
+  font-size: 16px;
+  color: var(--color-muted);
+}
+
+/* ============================================================
+   Viewer Page — Overall Layout
+   ============================================================ */
+.viewer-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  grid-template-rows: auto auto auto;
+  gap: 0;
+  height: calc(100vh - 53px);
+  overflow: hidden;
+}
+
+.viewer-left {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border);
+}
+
+.viewer-right {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ============================================================
+   Viewer — 2×2 Video Grid
+   ============================================================ */
+.video-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  flex: 1;
+  background: #000;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.video-tile {
+  position: relative;
+  background: #0a0a0a;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.video-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  flex: 1;
+  min-height: 0;
+}
+
+.video-tile-label {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+}
+
+.video-tile-volume {
+  background: rgba(0,0,0,0.7);
+  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.video-tile-volume span {
+  font-size: 11px;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.video-tile-volume input[type="range"] {
+  accent-color: #fff;
+}
+
+/* ============================================================
+   Viewer — Playback Controls Bar
+   ============================================================ */
+.controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+  flex-shrink: 0;
+}
+
+.controls-bar .btn-play {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+  min-width: 72px;
+}
+.controls-bar .btn-play:hover { background: var(--color-accent-hover); }
+
+.controls-time {
+  font-size: 12px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  color: var(--color-muted);
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+.controls-seek {
+  flex: 1;
+}
+
+.speed-group {
+  display: flex;
+  gap: 3px;
+}
+
+/* ============================================================
+   Viewer — Frame Scrubber (Filmstrip)
+   ============================================================ */
+.scrubber-panel {
+  height: 68px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  gap: 4px;
+  flex-shrink: 0;
+  scrollbar-width: thin;
+}
+
+.scrubber-panel::-webkit-scrollbar { height: 4px; }
+.scrubber-panel::-webkit-scrollbar-track { background: var(--color-surface); }
+.scrubber-panel::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+
+.scrubber-thumb {
+  flex-shrink: 0;
+  width: 80px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.1s;
+}
+
+.scrubber-thumb:hover { border-color: var(--color-accent); }
+.scrubber-thumb.active { border-color: var(--color-accent); }
+
+.scrubber-empty {
+  font-size: 12px;
+  color: var(--color-muted);
+  padding: 0 8px;
+}
+
+/* ============================================================
+   Viewer — Annotation Panel (right column)
+   ============================================================ */
+.annotation-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.annotation-controls {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.mark-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.btn-mark-start { background: #dcfce7; color: #15803d; border-color: #86efac; }
+.btn-mark-start:hover { background: #bbf7d0; }
+.btn-mark-start.active { background: #16a34a; color: #fff; border-color: #16a34a; }
+
+.btn-mark-end { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+.btn-mark-end:hover { background: #fecaca; }
+.btn-mark-end.active { background: #dc2626; color: #fff; border-color: #dc2626; }
+
+.mark-time-display {
+  font-size: 11px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  color: var(--color-muted);
+  display: flex;
+  gap: 12px;
+}
+
+.mark-time-display span { color: var(--color-text); font-weight: 500; }
+
+/* ============================================================
+   Annotation Form
+   ============================================================ */
+.annotation-form {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+  background: #fafafa;
+}
+
+.annotation-form.hidden { display: none; }
+
+.form-row { display: flex; flex-direction: column; gap: 4px; }
+
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.annotation-form .form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ============================================================
+   Annotation List
+   ============================================================ */
+.annotation-list-header {
+  padding: 10px 14px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.annotation-count {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.annotation-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+  scrollbar-width: thin;
+}
+
+.annotation-list::-webkit-scrollbar { width: 4px; }
+.annotation-list::-webkit-scrollbar-track { background: transparent; }
+.annotation-list::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+
+.annotation-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 14px;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.annotation-row:hover { background: var(--color-surface); }
+
+.annotation-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.annotation-row-times {
+  font-size: 11px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  color: var(--color-muted);
+  margin-bottom: 2px;
+}
+
+.annotation-row-meta {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.annotation-row-player { color: var(--color-accent); }
+
+.annotation-row-action {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: capitalize;
+  margin-left: 4px;
+}
+
+.annotation-row-notes {
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Action color classes — row left-border + action badge */
+.action-forehand  { border-left-color: var(--action-forehand-border);  }
+.action-backhand  { border-left-color: var(--action-backhand-border);  }
+.action-serve     { border-left-color: var(--action-serve-border);     }
+.action-volley    { border-left-color: var(--action-volley-border);    }
+.action-overhead  { border-left-color: var(--action-overhead-border);  }
+.action-drop_shot { border-left-color: var(--action-drop_shot-border); }
+.action-lob       { border-left-color: var(--action-lob-border);       }
+
+.badge-forehand  { background: var(--action-forehand);  color: var(--action-forehand-border);  }
+.badge-backhand  { background: var(--action-backhand);  color: var(--action-backhand-border);  }
+.badge-serve     { background: var(--action-serve);     color: var(--action-serve-border);     }
+.badge-volley    { background: var(--action-volley);    color: var(--action-volley-border);    }
+.badge-overhead  { background: var(--action-overhead);  color: var(--action-overhead-border);  }
+.badge-drop_shot { background: var(--action-drop_shot); color: var(--action-drop_shot-border); }
+.badge-lob       { background: var(--action-lob);       color: var(--action-lob-border);       }
+
+/* ============================================================
+   Export Buttons
+   ============================================================ */
+.export-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Empty States
+   ============================================================ */
+.empty-state {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+/* ============================================================
+   Loading / Status
+   ============================================================ */
+.status-bar {
+  font-size: 12px;
+  color: var(--color-muted);
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-shrink: 0;
+}

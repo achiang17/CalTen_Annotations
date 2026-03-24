@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Viewer — CalTen Annotations</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <h1 id="session-title">Loading session…</h1>
+    <a href="index.html" class="back-link">← Back to sessions</a>
+  </header>
+
+  <div class="viewer-layout">
+
+    <!-- ── Left column: video grid + controls + scrubber ── -->
+    <div class="viewer-left">
+
+      <div id="status-bar" class="status-bar">Loading videos…</div>
+
+      <!-- 2×2 Video Grid -->
+      <div class="video-grid" id="video-grid">
+        <!-- Tiles injected by viewer.js -->
+      </div>
+
+      <!-- Playback Controls -->
+      <div class="controls-bar">
+        <button class="btn btn-play" id="btn-play">Play</button>
+
+        <div class="speed-group">
+          <button class="btn btn-speed" data-speed="0.5">0.5×</button>
+          <button class="btn btn-speed active" data-speed="1">1×</button>
+          <button class="btn btn-speed" data-speed="2">2×</button>
+        </div>
+
+        <input type="range" class="controls-seek" id="seek-slider"
+               min="0" max="1000" value="0" step="1" />
+
+        <div class="controls-time" id="time-display">00:00:00.000</div>
+      </div>
+
+      <!-- Frame Scrubber -->
+      <div class="scrubber-panel" id="scrubber-panel">
+        <span class="scrubber-empty">Thumbnails will appear after videos load.</span>
+      </div>
+
+    </div>
+
+    <!-- ── Right column: annotation panel ── -->
+    <div class="viewer-right">
+      <div class="annotation-panel">
+
+        <!-- Mark buttons + time readout -->
+        <div class="annotation-controls">
+          <div class="mark-buttons">
+            <button class="btn btn-mark-start" id="btn-mark-start">
+              ⬤ Mark Start &nbsp;<kbd>S</kbd>
+            </button>
+            <button class="btn btn-mark-end" id="btn-mark-end">
+              ⬤ Mark End &nbsp;<kbd>E</kbd>
+            </button>
+          </div>
+          <div class="mark-time-display">
+            <div>Start: <span id="display-start">—</span></div>
+            <div>End: <span id="display-end">—</span></div>
+          </div>
+        </div>
+
+        <!-- Annotation Form (hidden until end is marked) -->
+        <div class="annotation-form hidden" id="annotation-form">
+          <div class="form-row-2">
+            <div class="form-row">
+              <label>Player</label>
+              <select id="form-player"></select>
+            </div>
+            <div class="form-row">
+              <label>Action</label>
+              <select id="form-action"></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>Notes</label>
+            <textarea id="form-notes" placeholder="Optional…" rows="2"></textarea>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" id="btn-confirm">Add Annotation</button>
+            <button class="btn btn-secondary" id="btn-cancel">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Annotation List Header -->
+        <div class="annotation-list-header">
+          <p class="section-title" style="margin:0">Annotations</p>
+          <span class="annotation-count" id="annotation-count">0</span>
+        </div>
+
+        <!-- Annotation List -->
+        <div class="annotation-list" id="annotation-list">
+          <div class="empty-state">No annotations yet.<br>Press S to mark a start time.</div>
+        </div>
+
+        <!-- Export -->
+        <div class="export-bar">
+          <button class="btn btn-secondary" id="btn-export-json">Export JSON</button>
+          <button class="btn btn-secondary" id="btn-export-csv">Export CSV</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Hidden canvas for frame extraction -->
+  <canvas id="thumb-canvas" style="display:none" width="160" height="90"></canvas>
+
+  <script src="viewer.js"></script>
+</body>
+</html>
