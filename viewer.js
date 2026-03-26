@@ -19,6 +19,64 @@ const state = {
   config:          null,
 };
 
+// ── Dropbox API helpers ─────────────────────────────────────
+async function dbxPost(token, endpoint, body) {
+  const res = await fetch(`https://api.dropboxapi.com/2${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Dropbox API ${endpoint} failed: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+async function dbxGetTemporaryLink(token, filePath) {
+  const result = await dbxPost(token, '/files/get_temporary_link', { path: filePath });
+  return result.link;
+}
+
+// ── Rosters ─────────────────────────────────────────────────
+const rosters = {
+  men: [
+    { id: 'P1', name: 'Constantin Pradenne' },
+    { id: 'P2', name: 'Nicholas Ciordas' },
+    { id: 'P3', name: 'Michael Gao' },
+    { id: 'P4', name: 'Soren Ghorai' },
+    { id: 'P5', name: 'Eric He' },
+    { id: 'P6', name: 'David Jin' },
+    { id: 'P7', name: 'Tejas Ram' },
+    { id: 'P8', name: 'Jan Safrata' },
+    { id: 'P9', name: 'Marco Yang' },
+    { id: 'P10', name: 'Andrew Zabelo' },
+  ],
+  women: [
+    { id: 'P1', name: 'Carissa Gerung' },
+    { id: 'P2', name: 'Polaris Hayes' },
+    { id: 'P3', name: 'Naya Kessman' },
+    { id: 'P4', name: 'Aoi Kunimoto' },
+    { id: 'P5', name: 'Anna Piland' },
+    { id: 'P6', name: 'Hannah Ramsperger' },
+    { id: 'P7', name: 'Anna Szczuka' },
+    { id: 'P8', name: 'Katelyn Waugh' },
+    { id: 'P9', name: 'Tara Zhan' },
+  ],
+};
+
+function loadViewerRoster(team) {
+  state.players = {};
+  rosters[team].forEach(p => {
+    state.players[p.id] = p.name;
+  });
+  // Re-populate the player dropdown in the annotation form if config is loaded
+  if (state.config) populateFormDropdowns();
+}
+
 // ── Boot ────────────────────────────────────────────────────
 (async function init() {
   const params = new URLSearchParams(window.location.search);
@@ -29,57 +87,77 @@ const state = {
     return;
   }
 
-  // Build players map from query params (new JSON format)
-  const playersParam = params.get('players');
-  if (playersParam) {
-    try {
-      const playersArray = JSON.parse(playersParam);
-      playersArray.forEach(p => {
-        if (p.id) state.players[p.id] = p.name || '';
-      });
-      // Also store the array for dropdown ordering
-      state.playersArray = playersArray;
-    } catch (e) {
-      console.warn('Could not parse players param:', e);
-    }
-  }
+  // Default to men's roster; wire up the roster switcher
+  const rosterSelect = document.getElementById('viewer-roster-select');
+  const initialTeam = params.get('team') || 'men';
+  rosterSelect.value = initialTeam;
+  loadViewerRoster(initialTeam);
 
-  let videosData, config;
+  rosterSelect.addEventListener('change', () => {
+    loadViewerRoster(rosterSelect.value);
+  });
+
+  // Load config (for actions list + Dropbox token)
+  let config;
   try {
-    [videosData, config] = await Promise.all([
-      fetch('videos.json').then(r => r.json()),
-      fetch('config.json').then(r => r.json()),
-    ]);
+    config = await fetch('config.json').then(r => r.json());
   } catch (e) {
-    setStatus('Failed to load data files. Open via a local server (python3 -m http.server).');
+    setStatus('Failed to load config.json. Open via a local server (python3 -m http.server).');
     return;
   }
 
   state.config = config;
+  const DROPBOX_TOKEN = config.dropbox_token;
+  const DROPBOX_FOLDER = config.dropbox_folder || '/full_dataset';
 
-  const session = videosData[state.folderKey];
-  if (!session) {
-    setStatus(`Session "${state.folderKey}" not found in videos.json.`);
+  if (!DROPBOX_TOKEN) {
+    setStatus('No Dropbox token found in config.json.');
     return;
   }
 
-  state.sessionLabel = session.label;
-  document.getElementById('session-title').textContent = session.label;
-  document.title = `${session.label} — CalTen`;
+  // Set session title
+  state.sessionLabel = state.folderKey;
+  document.getElementById('session-title').textContent = state.folderKey;
+  document.title = `${state.folderKey} — CalTen`;
 
-  // Populate form dropdowns (use players from URL, fallback to config)
+  // Populate form dropdowns
   populateFormDropdowns();
 
-  // Parse videos + calculate offsets
-  const camKeys = Object.keys(session.videos);
-  const parsed = camKeys.map(ck => {
-    const url = session.videos[ck];
-    return { camKey: ck, url, ...parseFilename(url) };
-  });
+  // Fetch video files from Dropbox
+  setStatus('Loading videos from Dropbox…');
+  let videoFiles;
+  try {
+    const folderPath = `${DROPBOX_FOLDER}/${state.folderKey}`;
+    const result = await dbxPost(DROPBOX_TOKEN, '/files/list_folder', { path: folderPath });
+    videoFiles = result.entries
+      .filter(e => e['.tag'] === 'file' && /\.mov$/i.test(e.name))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch (e) {
+    setStatus(`Failed to load session folder from Dropbox: ${e.message}`);
+    return;
+  }
+
+  if (videoFiles.length === 0) {
+    setStatus('No .MOV files found in this session folder.');
+    return;
+  }
+
+  // Get temporary streaming links for all videos
+  setStatus(`Getting streaming links for ${videoFiles.length} videos…`);
+  let parsed;
+  try {
+    parsed = await Promise.all(videoFiles.map(async (vf) => {
+      const url = await dbxGetTemporaryLink(DROPBOX_TOKEN, vf.path_display);
+      return { camKey: vf.name, url, filename: vf.name, ...parseFilename(vf.name) };
+    }));
+  } catch (e) {
+    setStatus(`Failed to get video links: ${e.message}`);
+    return;
+  }
 
   const offsets = calcOffsets(parsed);
   state.videos = parsed.map((v, i) => ({ ...v, offsetMs: offsets[i] }));
-  state.refIdx  = offsets.indexOf(0);
+  state.refIdx = offsets.indexOf(0);
 
   // Build video tiles
   buildVideoGrid();
@@ -87,32 +165,25 @@ const state = {
   // Wire playback controls
   wireControls();
 
-  // Load existing annotations if URL provided
-  if (session.annotations) {
-    loadExistingAnnotations(session.annotations);
-  }
-
   setStatus('');
 })();
 
 // ── Step 5: Filename parsing & sync ─────────────────────────
 
 /**
- * Extract wall-clock start time and direction from a Dropbox URL
- * whose filename follows the naming convention.
+ * Extract wall-clock start time and direction from a filename.
  *
- * Format: MM_DD_YYYY_HH_MM_SS_ms_{courtNum}_{direction}_{endHH}_{endMM}_{endSS}_{endMs}.MOV
- * Example: 02_25_2026_16_26_53_000_5_W_18_32_06_375.MOV
- *          03_22_2026_11_17_10_000_1_SE_12_23_54_086.MOV
+ * Format: MM_DD_YYYY_HH_MM_SS_ms_{courtNum}_{direction}_{camNum}_{endHH}_{endMM}_{endSS}_{endMs}.MOV
+ * Example: 02_25_2026_16_26_53_000_5_W_02_18_32_06_375.MOV
  */
-function parseFilename(url) {
-  // Pull the bare filename from the URL (before any query string)
-  const withoutQuery = url.split('?')[0];
+function parseFilename(filenameOrUrl) {
+  // Handle both raw filenames and URLs
+  const withoutQuery = filenameOrUrl.split('?')[0];
   const filename = withoutQuery.split('/').pop();
   const base = filename.replace(/\.MOV$/i, '');
   const parts = base.split('_');
 
-  // indices: 0=MM 1=DD 2=YYYY 3=HH 4=MM 5=SS 6=ms 7=courtNum 8=direction 9=endHH 10=endMM 11=endSS 12=endMs
+  // indices: 0=MM 1=DD 2=YYYY 3=HH 4=MM 5=SS 6=ms 7=courtNum 8=direction
   const hh   = parseInt(parts[3], 10) || 0;
   const mm   = parseInt(parts[4], 10) || 0;
   const ss   = parseInt(parts[5], 10) || 0;
@@ -122,7 +193,6 @@ function parseFilename(url) {
 
   const wallClockMs = ((hh * 3600) + (mm * 60) + ss) * 1000 + ms;
 
-  // Map direction codes to readable labels
   const directionLabels = {
     'W': 'West',
     'E': 'East',
@@ -133,8 +203,7 @@ function parseFilename(url) {
     'SW': 'Southwest',
     'SE': 'Southeast'
   };
-  const directionLabel = directionLabels[direction] || direction;
-  const label = directionLabel;
+  const label = directionLabels[direction] || direction;
 
   return { wallClockMs, direction, courtNum, label };
 }
@@ -407,7 +476,6 @@ function seekVideoToTime(videoEl, timeSec) {
 
 // ── Step 8: Annotation system ────────────────────────────────
 function markStart() {
-  pauseAll();
   state.pendingStart = getSyncedTime() * 1000; // store as ms
   state.pendingEnd   = null;
   document.getElementById('display-start').textContent = formatTime(state.pendingStart / 1000);
