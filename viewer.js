@@ -97,18 +97,14 @@ function loadViewerRoster(team) {
     loadViewerRoster(rosterSelect.value);
   });
 
-  // Load config (for actions list + Dropbox token)
-  let config;
-  try {
-    config = await fetch('config.json').then(r => r.json());
-  } catch (e) {
-    setStatus('Failed to load config.json. Open via a local server (python3 -m http.server).');
-    return;
-  }
-
+  // Config: actions are hardcoded, token comes from sessionStorage
+  const config = {
+    actions: ['forehand', 'backhand', 'serve', 'volley', 'overhead', 'drop_shot', 'lob'],
+  };
   state.config = config;
-  const DROPBOX_TOKEN = config.dropbox_token;
-  const DROPBOX_FOLDER = config.dropbox_folder || '/full_dataset';
+
+  const DROPBOX_TOKEN = getDropboxToken();
+  const DROPBOX_FOLDER = '/full_dataset';
 
   if (!DROPBOX_TOKEN) {
     setStatus('No Dropbox token found in config.json.');

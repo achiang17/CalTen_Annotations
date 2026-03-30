@@ -1,20 +1,11 @@
 (async function () {
-  // Load config
-  let config;
-  try {
-    config = await fetch('config.json').then(r => r.json());
-  } catch (err) {
-    document.getElementById('folder-list').innerHTML =
-      '<div class="empty-state">Failed to load config.json. Open via a local server (python3 -m http.server).</div>';
-    return;
-  }
-
-  const DROPBOX_TOKEN = config.dropbox_token;
-  const DROPBOX_FOLDER = config.dropbox_folder || '/full_dataset';
+  // Get Dropbox token from sessionStorage (set at login)
+  const DROPBOX_TOKEN = getDropboxToken();
+  const DROPBOX_FOLDER = '/full_dataset';
 
   if (!DROPBOX_TOKEN) {
     document.getElementById('folder-list').innerHTML =
-      '<div class="empty-state">No Dropbox token found in config.json.</div>';
+      '<div class="empty-state">No Dropbox token found. Please <a href="index.html">sign in</a> again.</div>';
     return;
   }
 

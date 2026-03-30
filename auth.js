@@ -1,25 +1,29 @@
 /* ============================================================
-   auth.js — Client-side password gate
-   ============================================================
-   Not cryptographically secure — prevents casual unauthorized
-   access only. Anyone reading source can bypass it.
+   auth.js — Client-side password gate + Dropbox token storage
    ============================================================ */
 
 const AUTH_KEY = 'calten_auth';
+const TOKEN_KEY = 'calten_dbx_token';
 const SITE_PASSWORD = 'gobeavers';
 
 /**
- * Check if user is authenticated. Call on protected pages.
- * Redirects to login.html if not authenticated.
+ * Check if user is authenticated. Redirects to login if not.
  */
 function requireAuth() {
   if (sessionStorage.getItem(AUTH_KEY) !== 'authenticated') {
-    window.location.href = 'login.html';
+    window.location.href = 'index.html';
   }
 }
 
 /**
- * Handle login form. Runs automatically on login.html.
+ * Get the stored Dropbox token.
+ */
+function getDropboxToken() {
+  return sessionStorage.getItem(TOKEN_KEY) || '';
+}
+
+/**
+ * Handle login form. Runs automatically on the login page.
  */
 function initLogin() {
   if (sessionStorage.getItem(AUTH_KEY) === 'authenticated') {
@@ -27,24 +31,40 @@ function initLogin() {
     return;
   }
 
-  const input = document.getElementById('login-password');
+  const passwordInput = document.getElementById('login-password');
+  const tokenInput = document.getElementById('login-token');
   const btn = document.getElementById('btn-login');
   const error = document.getElementById('login-error');
 
   function attempt() {
-    if (input.value === SITE_PASSWORD) {
-      sessionStorage.setItem(AUTH_KEY, 'authenticated');
-      window.location.href = 'home.html';
-    } else {
+    const password = passwordInput.value;
+    const token = tokenInput.value.trim();
+
+    if (password !== SITE_PASSWORD) {
+      error.textContent = 'Incorrect password.';
       error.style.display = 'block';
-      input.value = '';
-      input.focus();
+      passwordInput.value = '';
+      passwordInput.focus();
+      return;
     }
+
+    if (!token) {
+      error.textContent = 'Dropbox token is required.';
+      error.style.display = 'block';
+      tokenInput.focus();
+      return;
+    }
+
+    sessionStorage.setItem(AUTH_KEY, 'authenticated');
+    sessionStorage.setItem(TOKEN_KEY, token);
+    window.location.href = 'home.html';
   }
 
   btn.addEventListener('click', attempt);
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') attempt();
+  [passwordInput, tokenInput].forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') attempt();
+    });
   });
 }
 
