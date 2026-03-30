@@ -44,27 +44,27 @@ async function dbxGetTemporaryLink(token, filePath) {
 // ── Rosters ─────────────────────────────────────────────────
 const rosters = {
   men: [
-    { id: 'P1', name: 'Constantin Pradenne' },
-    { id: 'P2', name: 'Nicholas Ciordas' },
-    { id: 'P3', name: 'Michael Gao' },
-    { id: 'P4', name: 'Soren Ghorai' },
-    { id: 'P5', name: 'Eric He' },
-    { id: 'P6', name: 'David Jin' },
-    { id: 'P7', name: 'Tejas Ram' },
-    { id: 'P8', name: 'Jan Safrata' },
-    { id: 'P9', name: 'Marco Yang' },
-    { id: 'P10', name: 'Andrew Zabelo' },
+    { id: '1', name: 'Constantin Pradenne' },
+    { id: '2', name: 'Nicholas Ciordas' },
+    { id: '3', name: 'Michael Gao' },
+    { id: '4', name: 'Soren Ghorai' },
+    { id: '5', name: 'Eric He' },
+    { id: '6', name: 'David Jin' },
+    { id: '7', name: 'Tejas Ram' },
+    { id: '8', name: 'Jan Safrata' },
+    { id: '9', name: 'Marco Yang' },
+    { id: '10', name: 'Andrew Zabelo' },
   ],
   women: [
-    { id: 'P1', name: 'Carissa Gerung' },
-    { id: 'P2', name: 'Polaris Hayes' },
-    { id: 'P3', name: 'Naya Kessman' },
-    { id: 'P4', name: 'Aoi Kunimoto' },
-    { id: 'P5', name: 'Anna Piland' },
-    { id: 'P6', name: 'Hannah Ramsperger' },
-    { id: 'P7', name: 'Anna Szczuka' },
-    { id: 'P8', name: 'Katelyn Waugh' },
-    { id: 'P9', name: 'Tara Zhan' },
+    { id: '1', name: 'Carissa Gerung' },
+    { id: '2', name: 'Polaris Hayes' },
+    { id: '3', name: 'Naya Kessman' },
+    { id: '4', name: 'Aoi Kunimoto' },
+    { id: '5', name: 'Anna Piland' },
+    { id: '6', name: 'Hannah Ramsperger' },
+    { id: '7', name: 'Anna Szczuka' },
+    { id: '8', name: 'Katelyn Waugh' },
+    { id: '9', name: 'Tara Zhan' },
   ],
 };
 
@@ -295,13 +295,42 @@ function getSyncedTime() {
 
 /** Seek all videos to a given synced position (in seconds). */
 function seekAll(syncedSec) {
+  const wasPlaying = state.videos.some(v => v.el && !v.el.paused);
   state.isSeeking = true;
+
+  // Pause all videos during seek
+  state.videos.forEach(v => v.el && v.el.pause());
+  document.getElementById('btn-play').textContent = 'Play';
+
+  // Seek each video
   state.videos.forEach(v => {
     const target = syncedSec + (v.offsetMs / 1000);
     v.el.currentTime = Math.max(0, Math.min(target, v.el.duration || Infinity));
   });
   updateTimeDisplay(syncedSec);
-  setTimeout(() => { state.isSeeking = false; }, 50);
+
+  // Wait for all videos to finish seeking, then resume if was playing
+  const seekPromises = state.videos.map(v => new Promise(resolve => {
+    if (!v.el) { resolve(); return; }
+    const onSeeked = () => {
+      v.el.removeEventListener('seeked', onSeeked);
+      resolve();
+    };
+    v.el.addEventListener('seeked', onSeeked);
+    // Safety timeout in case seeked never fires
+    setTimeout(() => {
+      v.el.removeEventListener('seeked', onSeeked);
+      resolve();
+    }, 5000);
+  }));
+
+  Promise.all(seekPromises).then(() => {
+    state.isSeeking = false;
+    if (wasPlaying) {
+      state.videos.forEach(v => v.el && v.el.play().catch(() => {}));
+      document.getElementById('btn-play').textContent = 'Pause';
+    }
+  });
 }
 
 /** Format seconds → HH:MM:SS.mmm */
@@ -362,6 +391,15 @@ function wireControls() {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {
+    // Enter confirms annotation when form is visible
+    if (e.key === 'Enter') {
+      const form = document.getElementById('annotation-form');
+      if (form && !form.classList.contains('hidden')) {
+        e.preventDefault();
+        confirmAnnotation();
+        return;
+      }
+    }
     // Ignore when typing in an input/textarea
     if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
     if (e.key === 's' || e.key === 'S') markStart();
