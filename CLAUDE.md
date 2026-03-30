@@ -2,7 +2,7 @@
 ## Tennis Annotation Website
 
 ## Project Summary
-A static tennis video annotation tool. Coaches browse session folders, load up to 4 .MOV cameras into a wall-clock-synchronized 2×2 grid, and create time-region annotations (start + end) with player ID, player name, and tennis action. Annotations are exported as JSON/CSV. No backend. No framework. Vanilla HTML/CSS/JS only.
+A tennis video annotation tool. Coaches browse session folders, load up to 4 .MOV cameras into a wall-clock-synchronized 2×2 grid, and create time-region annotations (start + end) with player ID, player name, and tennis action. Annotations are exported as JSON/CSV. Served via a lightweight Python HTTP server with Basic Auth. Vanilla HTML/CSS/JS frontend only.
 
 For full feature details read PRD.md before starting any task.
 
@@ -11,7 +11,7 @@ For full feature details read PRD.md before starting any task.
 ## Hard Rules — Never Break These
 
 - **Vanilla HTML, CSS, JavaScript only** — no React, Vue, jQuery, or any framework
-- **No backend** — no servers, no databases, no Node.js runtime
+- **Minimal backend only** — `server.py` provides Basic Auth; no databases, no Node.js runtime
 - **No npm packages or external dependencies** — zero imports from CDNs or package managers
 - **No localStorage or sessionStorage** — all state lives in JS memory only
 - **Config-driven** — actions and player IDs always come from `config.json`, video URLs from `videos.json` — never hardcode these
@@ -22,7 +22,9 @@ For full feature details read PRD.md before starting any task.
 
 | File | Purpose |
 |---|---|
-| `index.html` | Landing page, folder browser, player roster setup |
+| `index.html` | Login page (entry point for GitHub Pages) |
+| `home.html` | Landing page, folder browser, player roster setup |
+| `auth.js` | Client-side password gate using sessionStorage |
 | `viewer.html` | 2×2 video grid, annotation panel, export |
 | `style.css` | All styles for both pages |
 | `app.js` | Loads `videos.json`, renders folder list, passes selected folder to viewer |
@@ -115,8 +117,8 @@ Keyboard shortcuts: `S` = Mark Start, `E` = Mark End
 
 ## What NOT To Do
 
-- Do not add login, authentication, or user accounts
-- Do not add a backend, API server, or database
+- Do not add user accounts or complex auth beyond Basic Auth
+- Do not add databases or heavyweight frameworks
 - Do not persist anything to localStorage or sessionStorage
 - Do not add features not in PRD.md without asking first
 - Do not change the `videos.json` or `config.json` schema without confirming

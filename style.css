@@ -242,6 +242,20 @@ input[type="range"] {
   font-size: 13px;
 }
 
+.login-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  outline: none;
+  box-sizing: border-box;
+}
+.login-input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
 /* ============================================================
    Index Page — Folder / Session Browser
    ============================================================ */

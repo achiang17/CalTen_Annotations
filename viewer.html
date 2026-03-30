@@ -10,7 +10,7 @@
 
   <header class="site-header">
     <h1 id="session-title">Loading session…</h1>
-    <a href="index.html" class="back-link">← Back to sessions</a>
+    <a href="home.html" class="back-link">← Back to sessions</a>
   </header>
 
   <div class="viewer-layout">
@@ -124,6 +124,8 @@
   <!-- Hidden canvas for frame extraction -->
   <canvas id="thumb-canvas" style="display:none" width="160" height="90"></canvas>
 
+  <script src="auth.js"></script>
+  <script>requireAuth();</script>
   <script src="viewer.js"></script>
 </body>
 </html>

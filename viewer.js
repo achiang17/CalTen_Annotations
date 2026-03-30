@@ -83,7 +83,7 @@ function loadViewerRoster(team) {
   state.folderKey = params.get('session') || '';
 
   if (!state.folderKey) {
-    setStatus('No session specified. <a href="index.html">Go back</a>.');
+    setStatus('No session specified. <a href="home.html">Go back</a>.');
     return;
   }
 
