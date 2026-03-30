@@ -551,13 +551,13 @@ function initSearchableSelect(containerId, hiddenId, options) {
 
   function renderOptions(filter) {
     dropdown.innerHTML = '';
-    highlighted = -1;
     const query = (filter || '').toLowerCase();
     const filtered = options.filter(o => o.label.toLowerCase().includes(query));
 
     filtered.forEach((o, i) => {
       const div = document.createElement('div');
       div.className = 'ss-option';
+      if (i === 0) div.classList.add('highlighted');
       div.textContent = o.label;
       div.addEventListener('mousedown', e => {
         e.preventDefault();
@@ -566,6 +566,7 @@ function initSearchableSelect(containerId, hiddenId, options) {
       dropdown.appendChild(div);
     });
 
+    highlighted = filtered.length > 0 ? 0 : -1;
     dropdown.classList.toggle('open', filtered.length > 0);
   }
 
@@ -601,8 +602,7 @@ function initSearchableSelect(containerId, hiddenId, options) {
       e.preventDefault();
       moveHighlight(-1);
     } else if (e.key === 'Enter') {
-      const items = dropdown.querySelectorAll('.ss-option');
-      if (highlighted >= 0 && items[highlighted]) {
+      if (dropdown.classList.contains('open') && highlighted >= 0) {
         e.preventDefault();
         e.stopPropagation();
         const query = (input.value || '').toLowerCase();
