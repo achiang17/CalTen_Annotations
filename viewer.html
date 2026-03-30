@@ -82,11 +82,19 @@
           <div class="form-row-2">
             <div class="form-row">
               <label>Player</label>
-              <select id="form-player"></select>
+              <div class="searchable-select" id="ss-player">
+                <input type="text" class="ss-input" placeholder="Search player…" autocomplete="off" />
+                <input type="hidden" id="form-player" />
+                <div class="ss-dropdown"></div>
+              </div>
             </div>
             <div class="form-row">
               <label>Action</label>
-              <select id="form-action"></select>
+              <div class="searchable-select" id="ss-action">
+                <input type="text" class="ss-input" placeholder="Search action…" autocomplete="off" />
+                <input type="hidden" id="form-action" />
+                <div class="ss-dropdown"></div>
+              </div>
             </div>
           </div>
           <div class="form-row">

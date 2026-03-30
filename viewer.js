@@ -295,42 +295,18 @@ function getSyncedTime() {
 
 /** Seek all videos to a given synced position (in seconds). */
 function seekAll(syncedSec) {
-  const wasPlaying = state.videos.some(v => v.el && !v.el.paused);
   state.isSeeking = true;
 
-  // Pause all videos during seek
+  // Always pause on seek
   state.videos.forEach(v => v.el && v.el.pause());
   document.getElementById('btn-play').textContent = 'Play';
 
-  // Seek each video
   state.videos.forEach(v => {
     const target = syncedSec + (v.offsetMs / 1000);
     v.el.currentTime = Math.max(0, Math.min(target, v.el.duration || Infinity));
   });
   updateTimeDisplay(syncedSec);
-
-  // Wait for all videos to finish seeking, then resume if was playing
-  const seekPromises = state.videos.map(v => new Promise(resolve => {
-    if (!v.el) { resolve(); return; }
-    const onSeeked = () => {
-      v.el.removeEventListener('seeked', onSeeked);
-      resolve();
-    };
-    v.el.addEventListener('seeked', onSeeked);
-    // Safety timeout in case seeked never fires
-    setTimeout(() => {
-      v.el.removeEventListener('seeked', onSeeked);
-      resolve();
-    }, 5000);
-  }));
-
-  Promise.all(seekPromises).then(() => {
-    state.isSeeking = false;
-    if (wasPlaying) {
-      state.videos.forEach(v => v.el && v.el.play().catch(() => {}));
-      document.getElementById('btn-play').textContent = 'Pause';
-    }
-  });
+  setTimeout(() => { state.isSeeking = false; }, 50);
 }
 
 /** Format seconds → HH:MM:SS.mmm */
@@ -544,36 +520,108 @@ function hideAnnotationForm() {
 }
 
 function populateFormDropdowns() {
-  const playerSel = document.getElementById('form-player');
-  const actionSel = document.getElementById('form-action');
-
-  // Populate players from URL params (dynamic roster)
-  playerSel.innerHTML = '';
+  // Build player options
   const playerIds = Object.keys(state.players);
-  
-  if (playerIds.length === 0) {
-    // Fallback: no players defined, show a placeholder
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = 'No players defined';
-    playerSel.appendChild(opt);
-  } else {
-    playerIds.forEach(pid => {
-      const name = state.players[pid] || '';
-      const opt = document.createElement('option');
-      opt.value = pid;
-      opt.textContent = name ? `${pid} — ${name}` : pid;
-      playerSel.appendChild(opt);
-    });
+  const playerOptions = playerIds.map(pid => {
+    const name = state.players[pid] || '';
+    return { value: pid, label: name ? `${pid} — ${name}` : pid };
+  });
+  initSearchableSelect('ss-player', 'form-player', playerOptions);
+
+  // Build action options
+  const actionOptions = state.config.actions.map(action => ({
+    value: action,
+    label: action.replace(/_/g, ' '),
+  }));
+  initSearchableSelect('ss-action', 'form-action', actionOptions);
+}
+
+function initSearchableSelect(containerId, hiddenId, options) {
+  const container = document.getElementById(containerId);
+  const input = container.querySelector('.ss-input');
+  const hidden = document.getElementById(hiddenId);
+  const dropdown = container.querySelector('.ss-dropdown');
+  let highlighted = -1;
+
+  // Set default selection
+  if (options.length > 0) {
+    hidden.value = options[0].value;
+    input.value = options[0].label;
   }
 
-  // Populate actions from config
-  actionSel.innerHTML = '';
-  state.config.actions.forEach(action => {
-    const opt = document.createElement('option');
-    opt.value = action;
-    opt.textContent = action.replace(/_/g, ' ');
-    actionSel.appendChild(opt);
+  function renderOptions(filter) {
+    dropdown.innerHTML = '';
+    highlighted = -1;
+    const query = (filter || '').toLowerCase();
+    const filtered = options.filter(o => o.label.toLowerCase().includes(query));
+
+    filtered.forEach((o, i) => {
+      const div = document.createElement('div');
+      div.className = 'ss-option';
+      div.textContent = o.label;
+      div.addEventListener('mousedown', e => {
+        e.preventDefault();
+        selectOption(o);
+      });
+      dropdown.appendChild(div);
+    });
+
+    dropdown.classList.toggle('open', filtered.length > 0);
+  }
+
+  function selectOption(o) {
+    hidden.value = o.value;
+    input.value = o.label;
+    dropdown.classList.remove('open');
+  }
+
+  function moveHighlight(dir) {
+    const items = dropdown.querySelectorAll('.ss-option');
+    if (items.length === 0) return;
+    items.forEach(el => el.classList.remove('highlighted'));
+    highlighted = Math.max(0, Math.min(items.length - 1, highlighted + dir));
+    items[highlighted].classList.add('highlighted');
+    items[highlighted].scrollIntoView({ block: 'nearest' });
+  }
+
+  input.addEventListener('focus', () => {
+    input.select();
+    renderOptions('');
+  });
+
+  input.addEventListener('input', () => {
+    renderOptions(input.value);
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      moveHighlight(1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveHighlight(-1);
+    } else if (e.key === 'Enter') {
+      const items = dropdown.querySelectorAll('.ss-option');
+      if (highlighted >= 0 && items[highlighted]) {
+        e.preventDefault();
+        e.stopPropagation();
+        const query = (input.value || '').toLowerCase();
+        const filtered = options.filter(o => o.label.toLowerCase().includes(query));
+        if (filtered[highlighted]) selectOption(filtered[highlighted]);
+      }
+    } else if (e.key === 'Escape') {
+      dropdown.classList.remove('open');
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    // Delay to allow mousedown on option to fire
+    setTimeout(() => {
+      dropdown.classList.remove('open');
+      // If typed value doesn't match any option, revert to current selection
+      const currentOpt = options.find(o => o.value === hidden.value);
+      if (currentOpt) input.value = currentOpt.label;
+    }, 150);
   });
 }
 
