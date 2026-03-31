@@ -256,51 +256,22 @@ input[type="range"] {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
-/* Searchable select dropdown */
-.searchable-select {
-  position: relative;
-}
-.ss-input {
+/* Form select styling */
+.form-select {
   width: 100%;
   padding: 6px 10px;
   font-size: 13px;
+  font-family: inherit;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   outline: none;
-  box-sizing: border-box;
-  font-family: inherit;
-}
-.ss-input:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
-}
-.ss-dropdown {
-  display: none;
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  max-height: 180px;
-  overflow-y: auto;
   background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-top: none;
-  border-radius: 0 0 6px 6px;
-  z-index: 100;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-.ss-dropdown.open {
-  display: block;
-}
-.ss-option {
-  padding: 6px 10px;
-  font-size: 13px;
+  color: var(--color-text);
   cursor: pointer;
 }
-.ss-option:hover,
-.ss-option.highlighted {
-  background: var(--color-surface);
-  color: var(--color-accent);
+.form-select:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
 /* ============================================================
@@ -482,8 +453,33 @@ input[type="range"] {
   min-width: 90px;
 }
 
-.controls-seek {
+.seek-wrapper {
   flex: 1;
+  position: relative;
+}
+
+.controls-seek {
+  width: 100%;
+}
+
+.seek-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 11px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.seek-tooltip.visible {
+  opacity: 1;
 }
 
 .speed-group {
@@ -491,46 +487,6 @@ input[type="range"] {
   gap: 3px;
 }
 
-/* ============================================================
-   Viewer — Frame Scrubber (Filmstrip)
-   ============================================================ */
-.scrubber-panel {
-  height: 68px;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface);
-  overflow-x: auto;
-  overflow-y: hidden;
-  display: flex;
-  align-items: center;
-  padding: 6px 10px;
-  gap: 4px;
-  flex-shrink: 0;
-  scrollbar-width: thin;
-}
-
-.scrubber-panel::-webkit-scrollbar { height: 4px; }
-.scrubber-panel::-webkit-scrollbar-track { background: var(--color-surface); }
-.scrubber-panel::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
-
-.scrubber-thumb {
-  flex-shrink: 0;
-  width: 80px;
-  height: 50px;
-  object-fit: cover;
-  border-radius: 3px;
-  border: 2px solid transparent;
-  cursor: pointer;
-  transition: border-color 0.1s;
-}
-
-.scrubber-thumb:hover { border-color: var(--color-accent); }
-.scrubber-thumb.active { border-color: var(--color-accent); }
-
-.scrubber-empty {
-  font-size: 12px;
-  color: var(--color-muted);
-  padding: 0 8px;
-}
 
 /* ============================================================
    Viewer — Roster Selector Bar
@@ -726,13 +682,14 @@ input[type="range"] {
    Export Buttons
    ============================================================ */
 .export-bar {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 8px;
   padding: 12px 14px;
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
 }
+
+.export-bar .btn { flex: 1; }
 
 /* ============================================================
    Empty States

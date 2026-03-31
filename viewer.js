@@ -261,7 +261,6 @@ function buildVideoGrid() {
         state.thumbsGenerated = true;
         computeSyncedDuration();
         updateSeekSlider();
-        generateScrubberThumbs();
       }
     });
 
@@ -346,13 +345,35 @@ function wireControls() {
   setInterval(() => {
     if (!state.isSeeking && refEl() && !refEl().paused) {
       updateSeekSlider();
+      correctDrift();
     }
   }, 100);
 
   // Seek slider
   const slider = document.getElementById('seek-slider');
+  const seekTooltip = document.getElementById('seek-tooltip');
+
   slider.addEventListener('input', () => {
     seekAll(parseInt(slider.value, 10) / 1000);
+  });
+
+  // Show time tooltip on hover
+  slider.addEventListener('mousemove', e => {
+    const rect = slider.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    const maxMs = parseInt(slider.max, 10) || 0;
+    const hoverSec = (pct * maxMs) / 1000;
+    seekTooltip.textContent = formatTime(Math.max(0, hoverSec));
+    // Position tooltip centered on cursor
+    const tipWidth = seekTooltip.offsetWidth;
+    let left = e.clientX - rect.left - tipWidth / 2;
+    left = Math.max(0, Math.min(left, rect.width - tipWidth));
+    seekTooltip.style.left = left + 'px';
+    seekTooltip.classList.add('visible');
+  });
+
+  slider.addEventListener('mouseleave', () => {
+    seekTooltip.classList.remove('visible');
   });
 
   // Speed buttons
@@ -367,6 +388,8 @@ function wireControls() {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {
+    // Ignore when focus is on an input/textarea/select
+    if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
     // Enter confirms annotation when form is visible
     if (e.key === 'Enter') {
       const form = document.getElementById('annotation-form');
@@ -376,8 +399,6 @@ function wireControls() {
         return;
       }
     }
-    // Ignore when typing in an input/textarea
-    if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
     if (e.key === 's' || e.key === 'S') markStart();
     if (e.key === 'e' || e.key === 'E') markEnd();
     if (e.key === ' ') { e.preventDefault(); togglePlay(); }
@@ -389,9 +410,8 @@ function wireControls() {
   document.getElementById('btn-confirm').addEventListener('click', confirmAnnotation);
   document.getElementById('btn-cancel').addEventListener('click', cancelAnnotation);
 
-  // Export buttons
-  document.getElementById('btn-export-json').addEventListener('click', exportJSON);
-  document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
+  // Save to Dropbox button
+  document.getElementById('btn-save-dropbox').addEventListener('click', saveToDropbox);
 }
 
 function togglePlay() {
@@ -402,9 +422,63 @@ function togglePlay() {
     videos.forEach(v => v.pause());
     document.getElementById('btn-play').textContent = 'Play';
   } else {
-    videos.forEach(v => v.play().catch(() => {}));
-    document.getElementById('btn-play').textContent = 'Pause';
+    syncedPlay(videos);
   }
+}
+
+/**
+ * Wait for all videos to be buffered enough, re-align,
+ * then start them in a single requestAnimationFrame for tight sync.
+ */
+function syncedPlay(videos) {
+  const btn = document.getElementById('btn-play');
+
+  // Re-align all videos to the current synced position
+  const syncedSec = getSyncedTime();
+  state.videos.forEach(v => {
+    const target = syncedSec + (v.offsetMs / 1000);
+    v.el.currentTime = Math.max(0, Math.min(target, v.el.duration || Infinity));
+  });
+
+  // Check if all videos are ready to play
+  if (!videos.every(v => v.readyState >= 3)) {
+    btn.textContent = 'Buffering…';
+    btn.disabled = true;
+
+    function checkReady() {
+      if (videos.every(v => v.readyState >= 3)) {
+        btn.textContent = 'Play';
+        btn.disabled = false;
+      } else {
+        setTimeout(checkReady, 50);
+      }
+    }
+    checkReady();
+    return;
+  }
+
+  // All ready — fire all play() calls in one rAF for tightest sync
+  requestAnimationFrame(() => {
+    videos.forEach(v => v.play().catch(() => {}));
+    btn.textContent = 'Pause';
+  });
+}
+
+/** Periodic drift correction — called from the poll interval in wireControls */
+function correctDrift() {
+  const ref = state.videos[state.refIdx];
+  if (!ref || !ref.el || ref.el.paused) return;
+  const refSynced = ref.el.currentTime - (ref.offsetMs / 1000);
+
+  state.videos.forEach((v, i) => {
+    if (i === state.refIdx || !v.el || v.el.paused) return;
+    const expected = refSynced + (v.offsetMs / 1000);
+    const drift = v.el.currentTime - expected;
+    // If drift exceeds 150ms, nudge the video back into sync
+    if (Math.abs(drift) > 0.15) {
+      v.el.currentTime = expected;
+    }
+  });
 }
 
 function pauseAll() {
@@ -412,77 +486,6 @@ function pauseAll() {
   document.getElementById('btn-play').textContent = 'Play';
 }
 
-// ── Step 7: Frame scrubber ───────────────────────────────────
-async function generateScrubberThumbs() {
-  if (state.syncedDuration <= 0) return;
-
-  const panel = document.getElementById('scrubber-panel');
-  panel.innerHTML = '';
-
-  const canvas = document.getElementById('thumb-canvas');
-  const ctx = canvas.getContext('2d');
-
-  const INTERVAL_SEC = 5;
-  const refVideo = state.videos[state.refIdx].el;
-  const refOffset = state.videos[state.refIdx].offsetMs / 1000;
-
-  const times = [];
-  for (let t = 0; t <= state.syncedDuration; t += INTERVAL_SEC) {
-    times.push(t);
-  }
-
-  setStatus('Generating thumbnails…');
-
-  for (const syncedSec of times) {
-    await seekVideoToTime(refVideo, syncedSec + refOffset);
-
-    let dataUrl = null;
-    try {
-      ctx.drawImage(refVideo, 0, 0, canvas.width, canvas.height);
-      dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-    } catch (e) {
-      // Cross-origin video taints the canvas — draw a time-label placeholder instead
-      ctx.fillStyle = '#1a1a1a';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#9ca3af';
-      ctx.font = '12px -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(formatTime(syncedSec), canvas.width / 2, canvas.height / 2 + 4);
-      dataUrl = canvas.toDataURL('image/png');
-    }
-
-    const img = document.createElement('img');
-    img.src = dataUrl;
-    img.className = 'scrubber-thumb';
-    img.title = formatTime(syncedSec);
-    img.dataset.syncedSec = syncedSec;
-    img.addEventListener('click', () => {
-      seekAll(syncedSec);
-      panel.querySelectorAll('.scrubber-thumb').forEach(t => t.classList.remove('active'));
-      img.classList.add('active');
-    });
-    panel.appendChild(img);
-  }
-
-  // Restore to beginning after thumbnail generation
-  seekAll(0);
-  setStatus('');
-}
-
-function seekVideoToTime(videoEl, timeSec) {
-  return new Promise(resolve => {
-    // If already at the target time, seeked won't fire — resolve immediately
-    if (Math.abs(videoEl.currentTime - timeSec) < 0.01) { resolve(); return; }
-    const timeout = setTimeout(resolve, 3000); // safety net if seeked never fires
-    const onSeeked = () => {
-      clearTimeout(timeout);
-      videoEl.removeEventListener('seeked', onSeeked);
-      resolve();
-    };
-    videoEl.addEventListener('seeked', onSeeked);
-    videoEl.currentTime = timeSec;
-  });
-}
 
 // ── Step 8: Annotation system ────────────────────────────────
 function markStart() {
@@ -512,6 +515,7 @@ function markEnd() {
 
 function showAnnotationForm() {
   document.getElementById('annotation-form').classList.remove('hidden');
+  document.getElementById('form-player').focus();
 }
 
 function hideAnnotationForm() {
@@ -520,108 +524,43 @@ function hideAnnotationForm() {
 }
 
 function populateFormDropdowns() {
-  // Build player options
-  const playerIds = Object.keys(state.players);
-  const playerOptions = playerIds.map(pid => {
+  // Build player <select>
+  const playerSelect = document.getElementById('form-player');
+  playerSelect.innerHTML = '';
+  Object.keys(state.players).forEach(pid => {
     const name = state.players[pid] || '';
-    return { value: pid, label: name ? `${pid} — ${name}` : pid };
-  });
-  initSearchableSelect('ss-player', 'form-player', playerOptions);
-
-  // Build action options
-  const actionOptions = state.config.actions.map(action => ({
-    value: action,
-    label: action.replace(/_/g, ' '),
-  }));
-  initSearchableSelect('ss-action', 'form-action', actionOptions);
-}
-
-function initSearchableSelect(containerId, hiddenId, options) {
-  const container = document.getElementById(containerId);
-  const input = container.querySelector('.ss-input');
-  const hidden = document.getElementById(hiddenId);
-  const dropdown = container.querySelector('.ss-dropdown');
-  let highlighted = -1;
-
-  // Set default selection
-  if (options.length > 0) {
-    hidden.value = options[0].value;
-    input.value = options[0].label;
-  }
-
-  function renderOptions(filter) {
-    dropdown.innerHTML = '';
-    const query = (filter || '').toLowerCase();
-    const filtered = options.filter(o => o.label.toLowerCase().includes(query));
-
-    filtered.forEach((o, i) => {
-      const div = document.createElement('div');
-      div.className = 'ss-option';
-      if (i === 0) div.classList.add('highlighted');
-      div.textContent = o.label;
-      div.addEventListener('mousedown', e => {
-        e.preventDefault();
-        selectOption(o);
-      });
-      dropdown.appendChild(div);
-    });
-
-    highlighted = filtered.length > 0 ? 0 : -1;
-    dropdown.classList.toggle('open', filtered.length > 0);
-  }
-
-  function selectOption(o) {
-    hidden.value = o.value;
-    input.value = o.label;
-    dropdown.classList.remove('open');
-  }
-
-  function moveHighlight(dir) {
-    const items = dropdown.querySelectorAll('.ss-option');
-    if (items.length === 0) return;
-    items.forEach(el => el.classList.remove('highlighted'));
-    highlighted = Math.max(0, Math.min(items.length - 1, highlighted + dir));
-    items[highlighted].classList.add('highlighted');
-    items[highlighted].scrollIntoView({ block: 'nearest' });
-  }
-
-  input.addEventListener('focus', () => {
-    input.select();
-    renderOptions('');
+    const opt = document.createElement('option');
+    opt.value = pid;
+    opt.textContent = name ? `${pid} — ${name}` : pid;
+    playerSelect.appendChild(opt);
   });
 
-  input.addEventListener('input', () => {
-    renderOptions(input.value);
+  // Build action <select>
+  const actionSelect = document.getElementById('form-action');
+  actionSelect.innerHTML = '';
+  state.config.actions.forEach(action => {
+    const opt = document.createElement('option');
+    opt.value = action;
+    opt.textContent = action.replace(/_/g, ' ');
+    actionSelect.appendChild(opt);
   });
 
-  input.addEventListener('keydown', e => {
-    if (e.key === 'ArrowDown') {
+  // Enter on player select → move focus to action select
+  playerSelect.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
       e.preventDefault();
-      moveHighlight(1);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      moveHighlight(-1);
-    } else if (e.key === 'Enter') {
-      if (dropdown.classList.contains('open') && highlighted >= 0) {
-        e.preventDefault();
-        e.stopPropagation();
-        const query = (input.value || '').toLowerCase();
-        const filtered = options.filter(o => o.label.toLowerCase().includes(query));
-        if (filtered[highlighted]) selectOption(filtered[highlighted]);
-      }
-    } else if (e.key === 'Escape') {
-      dropdown.classList.remove('open');
+      e.stopPropagation();
+      actionSelect.focus();
     }
   });
 
-  input.addEventListener('blur', () => {
-    // Delay to allow mousedown on option to fire
-    setTimeout(() => {
-      dropdown.classList.remove('open');
-      // If typed value doesn't match any option, revert to current selection
-      const currentOpt = options.find(o => o.value === hidden.value);
-      if (currentOpt) input.value = currentOpt.label;
-    }, 150);
+  // Enter on action select → confirm annotation
+  actionSelect.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      confirmAnnotation();
+    }
   });
 }
 
@@ -750,32 +689,7 @@ async function loadExistingAnnotations(url) {
   }
 }
 
-// ── Step 10: Export ──────────────────────────────────────────
-function exportJSON() {
-  const today = new Date().toISOString().split('T')[0];
-  const payload = {
-    session:     state.folderKey,
-    exported_at: new Date().toISOString().replace(/\.\d{3}Z$/, ''),
-    players:     Object.fromEntries(
-      Object.entries(state.players).filter(([, v]) => v)
-    ),
-    annotations: state.annotations,
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  triggerDownload(blob, `${state.folderKey}_annotations_${today}.json`);
-}
-
-function exportCSV() {
-  const today = new Date().toISOString().split('T')[0];
-  const cols = ['session','start_time','end_time','player_id','player_name','action_id','notes','created_at'];
-  const rows = [cols.join(',')];
-  state.annotations.forEach(a => {
-    rows.push(cols.map(c => csvEscape(String(a[c] ?? ''))).join(','));
-  });
-  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-  triggerDownload(blob, `${state.folderKey}_annotations_${today}.csv`);
-}
-
+// ── Step 10: Save to Dropbox ────────────────────────────────
 function csvEscape(val) {
   if (val.includes(',') || val.includes('"') || val.includes('\n')) {
     return '"' + val.replace(/"/g, '""') + '"';
@@ -783,15 +697,73 @@ function csvEscape(val) {
   return val;
 }
 
-function triggerDownload(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+async function dbxUpload(token, path, content) {
+  const res = await fetch('https://content.dropboxapi.com/2/files/upload', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Dropbox-API-Arg': JSON.stringify({
+        path: path,
+        mode: 'overwrite',
+        autorename: false,
+        mute: false,
+      }),
+      'Content-Type': 'application/octet-stream',
+    },
+    body: content,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Upload failed: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+async function saveToDropbox() {
+  if (state.annotations.length === 0) {
+    setStatus('No annotations to save.');
+    setTimeout(() => setStatus(''), 3000);
+    return;
+  }
+
+  const token = getDropboxToken();
+  if (!token) {
+    setStatus('No Dropbox token available.');
+    return;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const folderPath = `/full_dataset/${state.folderKey}`;
+
+  // Build CSV
+  const cols = ['session','start_time','end_time','player_id','player_name','action_id','notes','created_at'];
+  const rows = [cols.join(',')];
+  state.annotations.forEach(a => {
+    rows.push(cols.map(c => csvEscape(String(a[c] ?? ''))).join(','));
+  });
+  const csvContent = rows.join('\n');
+
+  const csvPath = `${folderPath}/${state.folderKey}_annotations_${today}.csv`;
+
+  const btn = document.getElementById('btn-save-dropbox');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  setStatus('Uploading annotations to Dropbox…');
+
+  try {
+    await dbxUpload(token, csvPath, csvContent);
+    setStatus('Annotations saved to Dropbox.');
+    btn.textContent = 'Saved ✓';
+    setTimeout(() => {
+      btn.textContent = 'Save to Dropbox';
+      btn.disabled = false;
+      setStatus('');
+    }, 3000);
+  } catch (e) {
+    setStatus(`Failed to save: ${e.message}`);
+    btn.textContent = 'Save to Dropbox';
+    btn.disabled = false;
+  }
 }
 
 // ── Utilities ────────────────────────────────────────────────
