@@ -20,6 +20,13 @@
 
       <div id="status-bar" class="status-bar">Loading videos…</div>
 
+      <!-- Calibration Banner -->
+      <div id="calibration-bar" class="calibration-bar hidden">
+        <span>Align videos to the same moment using the frame-step buttons, then confirm.</span>
+        <span class="cal-hint">Arrow keys: step frames on selected tile</span>
+        <button class="btn btn-primary" id="btn-confirm-calibration">Confirm Calibration</button>
+      </div>
+
       <!-- 2×2 Video Grid -->
       <div class="video-grid" id="video-grid">
         <!-- Tiles injected by viewer.js -->
@@ -28,6 +35,7 @@
       <!-- Playback Controls -->
       <div class="controls-bar">
         <button class="btn btn-play" id="btn-play">Play</button>
+        <button class="btn btn-secondary btn-recalibrate" id="btn-recalibrate">Recalibrate</button>
 
         <div class="speed-group">
           <button class="btn btn-speed" data-speed="0.5">0.5×</button>

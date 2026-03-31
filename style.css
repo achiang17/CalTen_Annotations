@@ -712,3 +712,78 @@ input[type="range"] {
   background: var(--color-surface);
   flex-shrink: 0;
 }
+
+/* ============================================================
+   Calibration
+   ============================================================ */
+.calibration-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #fffbeb;
+  border-bottom: 1px solid #fbbf24;
+  font-size: 13px;
+  color: #92400e;
+  flex-shrink: 0;
+}
+
+.calibration-bar.hidden { display: none; }
+
+.calibration-bar .cal-hint {
+  font-size: 11px;
+  color: #b45309;
+  margin-left: auto;
+}
+
+.calibration-bar .btn {
+  flex-shrink: 0;
+}
+
+.calibration-overlay {
+  position: absolute;
+  bottom: 40px; /* above volume strip */
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 10;
+}
+
+.cal-btn {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.cal-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.cal-readout {
+  color: #fff;
+  font-size: 12px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  min-width: 120px;
+  text-align: center;
+}
+
+.video-tile.cal-focused {
+  outline: 2px solid #fbbf24;
+  outline-offset: -2px;
+}
+
+.btn-recalibrate {
+  font-size: 11px;
+  padding: 5px 10px;
+}

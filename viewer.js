@@ -11,6 +11,7 @@ const state = {
   refIdx:          0,    // index of the reference (latest-starting) video
   syncedDuration:  0,    // synced timeline length in seconds
   isSeeking:       false,
+  calibrating:     false,
   thumbsGenerated: false,
   annotations:     [],
   nextId:          1,
@@ -152,7 +153,7 @@ function loadViewerRoster(team) {
   }
 
   const offsets = calcOffsets(parsed);
-  state.videos = parsed.map((v, i) => ({ ...v, offsetMs: offsets[i] }));
+  state.videos = parsed.map((v, i) => ({ ...v, offsetMs: offsets[i], calibrationMs: 0 }));
   state.refIdx = offsets.indexOf(0);
 
   // Build video tiles
@@ -214,6 +215,11 @@ function calcOffsets(parsedVideos) {
   return parsedVideos.map(v => maxStartMs - v.wallClockMs);
 }
 
+/** Total offset for a video: parsed offset + manual calibration adjustment. */
+function totalOffsetSec(v) {
+  return (v.offsetMs + v.calibrationMs) / 1000;
+}
+
 // ── Step 4 / 5: Build video grid ────────────────────────────
 function buildVideoGrid() {
   const grid = document.getElementById('video-grid');
@@ -255,12 +261,13 @@ function buildVideoGrid() {
 
     // Apply offset once metadata is available
     video.addEventListener('loadedmetadata', () => {
-      video.currentTime = v.offsetMs / 1000;
+      video.currentTime = totalOffsetSec(v);
       // After all videos have metadata, compute synced duration and build scrubber (once only)
       if (!state.thumbsGenerated && state.videos.every(sv => sv.el && sv.el.readyState >= 1)) {
         state.thumbsGenerated = true;
         computeSyncedDuration();
         updateSeekSlider();
+        showCalibration();
       }
     });
 
@@ -275,7 +282,7 @@ function computeSyncedDuration() {
   // Synced duration = shortest available synced length across all videos
   let min = Infinity;
   state.videos.forEach(v => {
-    const syncedLen = v.el.duration - (v.offsetMs / 1000);
+    const syncedLen = v.el.duration - totalOffsetSec(v);
     if (syncedLen < min) min = syncedLen;
   });
   state.syncedDuration = isFinite(min) ? min : 0;
@@ -289,7 +296,7 @@ function computeSyncedDuration() {
 function getSyncedTime() {
   const ref = state.videos[state.refIdx];
   if (!ref || !ref.el) return 0;
-  return ref.el.currentTime - (ref.offsetMs / 1000);
+  return ref.el.currentTime - totalOffsetSec(ref);
 }
 
 /** Seek all videos to a given synced position (in seconds). */
@@ -301,7 +308,7 @@ function seekAll(syncedSec) {
   document.getElementById('btn-play').textContent = 'Play';
 
   state.videos.forEach(v => {
-    const target = syncedSec + (v.offsetMs / 1000);
+    const target = syncedSec + totalOffsetSec(v);
     v.el.currentTime = Math.max(0, Math.min(target, v.el.duration || Infinity));
   });
   updateTimeDisplay(syncedSec);
@@ -390,6 +397,22 @@ function wireControls() {
   document.addEventListener('keydown', e => {
     // Ignore when focus is on an input/textarea/select
     if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+
+    // Calibration mode: arrow keys step frames on focused tile
+    if (state.calibrating) {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        stepFrame(state.calibrationFocusIdx, -1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        stepFrame(state.calibrationFocusIdx, 1);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        hideCalibration();
+      }
+      return; // Block all other shortcuts during calibration
+    }
+
     // Enter confirms annotation when form is visible
     if (e.key === 'Enter') {
       const form = document.getElementById('annotation-form');
@@ -412,9 +435,14 @@ function wireControls() {
 
   // Save to Dropbox button
   document.getElementById('btn-save-dropbox').addEventListener('click', saveToDropbox);
+
+  // Calibration buttons
+  document.getElementById('btn-confirm-calibration').addEventListener('click', hideCalibration);
+  document.getElementById('btn-recalibrate').addEventListener('click', showCalibration);
 }
 
 function togglePlay() {
+  if (state.calibrating) return;
   const videos = state.videos.map(v => v.el).filter(Boolean);
   if (videos.length === 0) return;
   const anyPlaying = videos.some(v => !v.paused);
@@ -436,7 +464,7 @@ function syncedPlay(videos) {
   // Re-align all videos to the current synced position
   const syncedSec = getSyncedTime();
   state.videos.forEach(v => {
-    const target = syncedSec + (v.offsetMs / 1000);
+    const target = syncedSec + totalOffsetSec(v);
     v.el.currentTime = Math.max(0, Math.min(target, v.el.duration || Infinity));
   });
 
@@ -468,11 +496,11 @@ function syncedPlay(videos) {
 function correctDrift() {
   const ref = state.videos[state.refIdx];
   if (!ref || !ref.el || ref.el.paused) return;
-  const refSynced = ref.el.currentTime - (ref.offsetMs / 1000);
+  const refSynced = ref.el.currentTime - totalOffsetSec(ref);
 
   state.videos.forEach((v, i) => {
     if (i === state.refIdx || !v.el || v.el.paused) return;
-    const expected = refSynced + (v.offsetMs / 1000);
+    const expected = refSynced + totalOffsetSec(v);
     const drift = v.el.currentTime - expected;
     // If drift exceeds 150ms, nudge the video back into sync
     if (Math.abs(drift) > 0.15) {
@@ -486,6 +514,104 @@ function pauseAll() {
   document.getElementById('btn-play').textContent = 'Play';
 }
 
+// ── Calibration system ──────────────────────────────────────
+const FRAME_MS = 1000 / 60; // ~16.67ms per frame at 60fps
+
+function showCalibration() {
+  state.calibrating = true;
+
+  // Pause all videos
+  pauseAll();
+
+  // Show calibration banner
+  document.getElementById('calibration-bar').classList.remove('hidden');
+
+  // Disable playback and annotation controls
+  document.getElementById('btn-play').disabled = true;
+  document.getElementById('btn-mark-start').disabled = true;
+  document.getElementById('btn-mark-end').disabled = true;
+
+  // Add calibration overlay to each video tile
+  const tiles = document.querySelectorAll('.video-tile');
+  tiles.forEach((tile, i) => {
+    // Remove any existing calibration overlay
+    const existing = tile.querySelector('.calibration-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'calibration-overlay';
+
+    const frames = Math.round(state.videos[i].calibrationMs / FRAME_MS);
+    const ms = Math.round(state.videos[i].calibrationMs);
+
+    overlay.innerHTML = `
+      <button class="cal-btn cal-prev" data-idx="${i}" data-dir="-1">&larr; -1f</button>
+      <span class="cal-readout" id="cal-readout-${i}">${formatCalibration(frames, ms)}</span>
+      <button class="cal-btn cal-next" data-idx="${i}" data-dir="1">+1f &rarr;</button>
+    `;
+    tile.appendChild(overlay);
+
+    // Wire button clicks
+    overlay.querySelectorAll('.cal-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.idx, 10);
+        const dir = parseInt(btn.dataset.dir, 10);
+        stepFrame(idx, dir);
+      });
+    });
+
+    // Track which tile was last clicked for keyboard stepping
+    tile.addEventListener('click', () => {
+      state.calibrationFocusIdx = i;
+      tiles.forEach(t => t.classList.remove('cal-focused'));
+      tile.classList.add('cal-focused');
+    });
+  });
+
+  // Default focus to first tile
+  state.calibrationFocusIdx = 0;
+  if (tiles.length > 0) tiles[0].classList.add('cal-focused');
+}
+
+function hideCalibration() {
+  state.calibrating = false;
+
+  // Hide calibration banner
+  document.getElementById('calibration-bar').classList.add('hidden');
+
+  // Re-enable controls
+  document.getElementById('btn-play').disabled = false;
+  document.getElementById('btn-mark-start').disabled = false;
+  document.getElementById('btn-mark-end').disabled = false;
+
+  // Remove calibration overlays
+  document.querySelectorAll('.calibration-overlay').forEach(el => el.remove());
+  document.querySelectorAll('.video-tile').forEach(t => t.classList.remove('cal-focused'));
+
+  // Recompute synced duration with new calibration offsets
+  computeSyncedDuration();
+  seekAll(0);
+}
+
+function stepFrame(videoIndex, direction) {
+  const v = state.videos[videoIndex];
+  if (!v || !v.el) return;
+
+  v.calibrationMs += direction * FRAME_MS;
+  v.el.currentTime += direction * (FRAME_MS / 1000);
+
+  // Update readout
+  const frames = Math.round(v.calibrationMs / FRAME_MS);
+  const ms = Math.round(v.calibrationMs);
+  const readout = document.getElementById(`cal-readout-${videoIndex}`);
+  if (readout) readout.textContent = formatCalibration(frames, ms);
+}
+
+function formatCalibration(frames, ms) {
+  const sign = frames >= 0 ? '+' : '';
+  return `${sign}${frames}f (${sign}${ms}ms)`;
+}
 
 // ── Step 8: Annotation system ────────────────────────────────
 function markStart() {
