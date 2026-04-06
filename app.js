@@ -43,52 +43,9 @@
     return URL.createObjectURL(blob);
   }
 
-  // ── Roster State ──────────────────────────────────────────
-  const rosters = {
-    men: [
-      { id: '1', name: 'Constantin Pradenne' },
-      { id: '2', name: 'Nicholas Ciordas' },
-      { id: '3', name: 'Michael Gao' },
-      { id: '4', name: 'Soren Ghorai' },
-      { id: '5', name: 'Eric He' },
-      { id: '6', name: 'David Jin' },
-      { id: '7', name: 'Tejas Ram' },
-      { id: '8', name: 'Jan Safrata' },
-      { id: '9', name: 'Marco Yang' },
-      { id: '10', name: 'Andrew Zabelo' },
-    ],
-    women: [
-      { id: '1', name: 'Carissa Gerung' },
-      { id: '2', name: 'Polaris Hayes' },
-      { id: '3', name: 'Naya Kessman' },
-      { id: '4', name: 'Aoi Kunimoto' },
-      { id: '5', name: 'Anna Piland' },
-      { id: '6', name: 'Hannah Ramsperger' },
-      { id: '7', name: 'Anna Szczuka' },
-      { id: '8', name: 'Katelyn Waugh' },
-      { id: '9', name: 'Tara Zhan' },
-    ],
-  };
-
-  let players = [];
-  const rosterBody = document.getElementById('roster-body');
+  // ── Roster + Annotator ─────────────────────────────────────
   const rosterSelect = document.getElementById('roster-select');
-
-  function loadRoster(team) {
-    players = rosters[team].map(p => ({ ...p }));
-    rosterBody.innerHTML = '';
-    players.forEach(p => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${escapeHtml(p.id)}</td><td>${escapeHtml(p.name)}</td>`;
-      rosterBody.appendChild(tr);
-    });
-  }
-
-  loadRoster('men');
-
-  rosterSelect.addEventListener('change', () => {
-    loadRoster(rosterSelect.value);
-  });
+  const annotatorInput = document.getElementById('annotator-name');
 
   // ── Session list from Dropbox ─────────────────────────────
   const folderList = document.getElementById('folder-list');
@@ -202,9 +159,17 @@
 
   // ── Open session ─────────────────────────────────────────
   function openSession(folderName) {
+    const name = annotatorInput.value.trim();
+    if (!name) {
+      annotatorInput.style.border = '2px solid #dc2626';
+      annotatorInput.focus();
+      annotatorInput.placeholder = 'Please enter your name first';
+      return;
+    }
     const params = new URLSearchParams();
     params.set('session', folderName);
     params.set('team', rosterSelect.value);
+    params.set('annotator', name);
     window.location.href = `viewer.html?${params.toString()}`;
   }
 

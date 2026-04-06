@@ -96,8 +96,21 @@
             </div>
           </div>
           <div class="form-row">
+            <label>Drill</label>
+            <select id="form-drill" class="form-select">
+              <option value="">— None —</option>
+              <option value="ground_strokes">Ground Strokes</option>
+              <option value="net_play">Net Play</option>
+              <option value="serves">Serves</option>
+            </select>
+          </div>
+          <div class="form-row">
             <label>Notes</label>
             <textarea id="form-notes" placeholder="Optional…" rows="2"></textarea>
+          </div>
+          <div class="form-row" style="flex-direction:row; align-items:center; gap:8px;">
+            <input type="checkbox" id="form-perfect" />
+            <label for="form-perfect" style="margin:0; cursor:pointer;">Perfect stroke</label>
           </div>
           <div class="form-actions">
             <button class="btn btn-primary" id="btn-confirm">Add Annotation</button>

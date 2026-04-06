@@ -14,28 +14,20 @@
 
   <div class="page-body">
 
-    <!-- Player Roster Setup -->
+    <!-- Annotator + Roster Setup -->
     <section style="max-width: 640px; margin-bottom: 32px;">
-      <p class="section-title">Player Roster</p>
-      <div class="card roster-panel">
-        <div style="margin-bottom: 12px;">
+      <div class="card" style="padding: 20px;">
+        <div style="margin-bottom: 16px;">
+          <label for="annotator-name" style="display:block; font-size: 14px; font-weight: 500; margin-bottom: 6px;">Your Name (Annotator)</label>
+          <input type="text" id="annotator-name" class="login-input" placeholder="Enter your name" style="max-width: 320px;" />
+        </div>
+        <div style="margin-bottom: 0;">
           <label for="roster-select" style="font-size: 14px; font-weight: 500; margin-right: 8px;">Team:</label>
           <select id="roster-select" class="roster-dropdown">
             <option value="men">Men's Roster</option>
             <option value="women">Women's Roster</option>
           </select>
         </div>
-        <table class="roster-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Player Name</th>
-            </tr>
-          </thead>
-          <tbody id="roster-body">
-            <!-- Rows injected by app.js -->
-          </tbody>
-        </table>
       </div>
     </section>
 

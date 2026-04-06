@@ -6,12 +6,14 @@
 const state = {
   folderKey:       '',
   sessionLabel:    '',
+  annotator:       '',
   players:         {},   // { P1: 'Rafael Nadal', … }
   videos:          [],   // [{ camKey, url, wallClockMs, offsetMs, el }]
   refIdx:          0,    // index of the reference (latest-starting) video
   syncedDuration:  0,    // synced timeline length in seconds
   isSeeking:       false,
   calibrating:     false,
+  calibrationLoaded: false,
   thumbsGenerated: false,
   annotations:     [],
   nextId:          1,
@@ -88,6 +90,8 @@ function loadViewerRoster(team) {
     return;
   }
 
+  state.annotator = params.get('annotator') || '';
+
   // Default to men's roster; wire up the roster switcher
   const rosterSelect = document.getElementById('viewer-roster-select');
   const initialTeam = params.get('team') || 'men';
@@ -120,23 +124,47 @@ function loadViewerRoster(team) {
   // Populate form dropdowns
   populateFormDropdowns();
 
-  // Fetch video files from Dropbox
-  setStatus('Loading videos from Dropbox…');
-  let videoFiles;
+  // Fetch all files from session folder
+  setStatus('Loading session from Dropbox…');
+  const folderPath = `${DROPBOX_FOLDER}/${state.folderKey}`;
+  let folderEntries;
   try {
-    const folderPath = `${DROPBOX_FOLDER}/${state.folderKey}`;
     const result = await dbxPost(DROPBOX_TOKEN, '/files/list_folder', { path: folderPath });
-    videoFiles = result.entries
-      .filter(e => e['.tag'] === 'file' && /\.mov$/i.test(e.name))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    folderEntries = result.entries;
   } catch (e) {
     setStatus(`Failed to load session folder from Dropbox: ${e.message}`);
     return;
   }
 
+  const videoFiles = folderEntries
+    .filter(e => e['.tag'] === 'file' && /\.mov$/i.test(e.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   if (videoFiles.length === 0) {
     setStatus('No .MOV files found in this session folder.');
     return;
+  }
+
+  // Load existing annotation JSON if present
+  const annotationFile = folderEntries
+    .filter(e => e['.tag'] === 'file' && /annotations.*\.json$/i.test(e.name))
+    .sort((a, b) => b.name.localeCompare(a.name))[0];
+
+  if (annotationFile) {
+    try {
+      setStatus('Loading existing annotations…');
+      const link = await dbxGetTemporaryLink(DROPBOX_TOKEN, annotationFile.path_display);
+      const data = await fetch(link).then(r => r.json());
+      if (Array.isArray(data.annotations) && data.annotations.length > 0) {
+        data.annotations.forEach(a => {
+          state.annotations.push(a);
+          if (a.id >= state.nextId) state.nextId = a.id + 1;
+        });
+        renderAnnotationList();
+      }
+    } catch (err) {
+      console.warn('Could not load existing annotations:', err);
+    }
   }
 
   // Get temporary streaming links for all videos
@@ -155,6 +183,27 @@ function loadViewerRoster(team) {
   const offsets = calcOffsets(parsed);
   state.videos = parsed.map((v, i) => ({ ...v, offsetMs: offsets[i], calibrationMs: 0 }));
   state.refIdx = offsets.indexOf(0);
+
+  // Load saved calibration if present
+  const calibrationFile = folderEntries
+    .filter(e => e['.tag'] === 'file' && /calibration\.json$/i.test(e.name))[0];
+
+  if (calibrationFile) {
+    try {
+      const link = await dbxGetTemporaryLink(DROPBOX_TOKEN, calibrationFile.path_display);
+      const calData = await fetch(link).then(r => r.json());
+      if (calData.calibration) {
+        state.videos.forEach(v => {
+          if (calData.calibration[v.filename] !== undefined) {
+            v.calibrationMs = calData.calibration[v.filename];
+          }
+        });
+        state.calibrationLoaded = true;
+      }
+    } catch (err) {
+      console.warn('Could not load calibration:', err);
+    }
+  }
 
   // Build video tiles
   buildVideoGrid();
@@ -267,7 +316,14 @@ function buildVideoGrid() {
         state.thumbsGenerated = true;
         computeSyncedDuration();
         updateSeekSlider();
-        showCalibration();
+        if (state.calibrationLoaded) {
+          // Calibration already loaded from Dropbox — skip UI, just seek to start
+          seekAll(0);
+          setStatus('Calibration loaded from saved data.');
+          setTimeout(() => setStatus(''), 2000);
+        } else {
+          showCalibration();
+        }
       }
     });
 
@@ -520,6 +576,10 @@ const FRAME_MS = 1000 / 60; // ~16.67ms per frame at 60fps
 function showCalibration() {
   state.calibrating = true;
 
+  // Snapshot old ref calibration so we can adjust annotations on confirm
+  const ref = state.videos[state.refIdx];
+  state.oldRefCalibrationMs = ref ? ref.calibrationMs : 0;
+
   // Pause all videos
   pauseAll();
 
@@ -589,9 +649,26 @@ function hideCalibration() {
   document.querySelectorAll('.calibration-overlay').forEach(el => el.remove());
   document.querySelectorAll('.video-tile').forEach(t => t.classList.remove('cal-focused'));
 
+  // Adjust existing annotation times if the reference video's calibration changed
+  const ref = state.videos[state.refIdx];
+  const newRefCal = ref ? ref.calibrationMs : 0;
+  const deltaSec = (state.oldRefCalibrationMs - newRefCal) / 1000;
+  if (deltaSec !== 0 && state.annotations.length > 0) {
+    state.annotations.forEach(a => {
+      const startSec = timeStringToSeconds(a.start_time) + deltaSec;
+      const endSec = timeStringToSeconds(a.end_time) + deltaSec;
+      a.start_time = formatTime(Math.max(0, startSec));
+      a.end_time = formatTime(Math.max(0, endSec));
+    });
+    renderAnnotationList();
+  }
+
   // Recompute synced duration with new calibration offsets
   computeSyncedDuration();
   seekAll(0);
+
+  // Save calibration to Dropbox
+  saveCalibrationToDropbox();
 }
 
 function stepFrame(videoIndex, direction) {
@@ -611,6 +688,34 @@ function stepFrame(videoIndex, direction) {
 function formatCalibration(frames, ms) {
   const sign = frames >= 0 ? '+' : '';
   return `${sign}${frames}f (${sign}${ms}ms)`;
+}
+
+async function saveCalibrationToDropbox() {
+  const token = getDropboxToken();
+  if (!token) return;
+
+  const calibration = {};
+  state.videos.forEach(v => {
+    calibration[v.filename] = v.calibrationMs;
+  });
+
+  const data = JSON.stringify({
+    session: state.folderKey,
+    saved_at: new Date().toISOString(),
+    calibration: calibration,
+  }, null, 2);
+
+  const path = `/full_dataset/${state.folderKey}/${state.folderKey}_calibration.json`;
+
+  try {
+    await dbxUpload(token, path, data);
+    setStatus('Calibration saved.');
+    setTimeout(() => setStatus(''), 2000);
+  } catch (err) {
+    console.warn('Could not save calibration:', err);
+    setStatus('Failed to save calibration.');
+    setTimeout(() => setStatus(''), 3000);
+  }
 }
 
 // ── Step 8: Annotation system ────────────────────────────────
@@ -647,6 +752,8 @@ function showAnnotationForm() {
 function hideAnnotationForm() {
   document.getElementById('annotation-form').classList.add('hidden');
   document.getElementById('form-notes').value = '';
+  document.getElementById('form-drill').value = '';
+  document.getElementById('form-perfect').checked = false;
 }
 
 function populateFormDropdowns() {
@@ -664,6 +771,10 @@ function populateFormDropdowns() {
   // Build action <select>
   const actionSelect = document.getElementById('form-action');
   actionSelect.innerHTML = '';
+  const noneOpt = document.createElement('option');
+  noneOpt.value = '';
+  noneOpt.textContent = '— None —';
+  actionSelect.appendChild(noneOpt);
   state.config.actions.forEach(action => {
     const opt = document.createElement('option');
     opt.value = action;
@@ -696,7 +807,9 @@ function confirmAnnotation() {
   const playerId   = document.getElementById('form-player').value;
   const playerName = state.players[playerId] || '';
   const actionId   = document.getElementById('form-action').value;
+  const drill      = document.getElementById('form-drill').value;
   const notes      = document.getElementById('form-notes').value.trim();
+  const perfect    = document.getElementById('form-perfect').checked;
 
   const annotation = {
     id:          state.nextId++,
@@ -705,7 +818,10 @@ function confirmAnnotation() {
     player_id:   playerId,
     player_name: playerName,
     action_id:   actionId,
+    drill:       drill,
+    perfect:     perfect,
     notes:       notes,
+    annotator:   state.annotator,
     created_at:  new Date().toISOString().replace(/\.\d{3}Z$/, ''),
     session:     state.folderKey,
   };
@@ -759,6 +875,9 @@ function renderAnnotationList() {
         <div class="annotation-row-meta">
           <span class="annotation-row-player">${a.player_id}${a.player_name ? ' — ' + a.player_name : ''}</span>
           <span class="annotation-row-action badge-${a.action_id}">${a.action_id.replace(/_/g,' ')}</span>
+          ${a.drill ? `<span class="annotation-row-drill">${a.drill.replace(/_/g,' ')}</span>` : ''}
+          ${a.perfect ? '<span class="annotation-row-perfect">Perfect</span>' : ''}
+          ${a.annotator ? `<span class="annotation-row-annotator">by ${escapeHtml(a.annotator)}</span>` : ''}
         </div>
         ${a.notes ? `<div class="annotation-row-notes">${escapeHtml(a.notes)}</div>` : ''}
       </div>
@@ -790,29 +909,6 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-// ── Step 9: Load existing annotations ───────────────────────
-async function loadExistingAnnotations(url) {
-  if (!url) return;
-  try {
-    const data = await fetch(url).then(r => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.json();
-    });
-    if (Array.isArray(data.annotations) && data.annotations.length > 0) {
-      // Merge, advancing nextId past any loaded ids
-      data.annotations.forEach(a => {
-        state.annotations.push(a);
-        if (a.id >= state.nextId) state.nextId = a.id + 1;
-      });
-      renderAnnotationList();
-      setStatus(`Loaded ${data.annotations.length} existing annotation(s).`);
-      setTimeout(() => setStatus(''), 3000);
-    }
-  } catch (err) {
-    console.warn('Could not load existing annotations:', err);
-  }
 }
 
 // ── Step 10: Save to Dropbox ────────────────────────────────
@@ -858,18 +954,25 @@ async function saveToDropbox() {
     return;
   }
 
-  const today = new Date().toISOString().split('T')[0];
   const folderPath = `/full_dataset/${state.folderKey}`;
 
+  // Build JSON (canonical format — this file gets auto-loaded next time)
+  const jsonData = {
+    session: state.folderKey,
+    exported_at: new Date().toISOString(),
+    annotations: state.annotations,
+  };
+  const jsonContent = JSON.stringify(jsonData, null, 2);
+  const jsonPath = `${folderPath}/${state.folderKey}_annotations.json`;
+
   // Build CSV
-  const cols = ['session','start_time','end_time','player_id','player_name','action_id','notes','created_at'];
+  const cols = ['session','start_time','end_time','player_id','player_name','action_id','drill','perfect','notes','annotator','created_at'];
   const rows = [cols.join(',')];
   state.annotations.forEach(a => {
     rows.push(cols.map(c => csvEscape(String(a[c] ?? ''))).join(','));
   });
   const csvContent = rows.join('\n');
-
-  const csvPath = `${folderPath}/${state.folderKey}_annotations_${today}.csv`;
+  const csvPath = `${folderPath}/${state.folderKey}_annotations.csv`;
 
   const btn = document.getElementById('btn-save-dropbox');
   btn.disabled = true;
@@ -877,8 +980,11 @@ async function saveToDropbox() {
   setStatus('Uploading annotations to Dropbox…');
 
   try {
-    await dbxUpload(token, csvPath, csvContent);
-    setStatus('Annotations saved to Dropbox.');
+    await Promise.all([
+      dbxUpload(token, jsonPath, jsonContent),
+      dbxUpload(token, csvPath, csvContent),
+    ]);
+    setStatus(`Saved ${state.annotations.length} annotation(s) to Dropbox.`);
     btn.textContent = 'Saved ✓';
     setTimeout(() => {
       btn.textContent = 'Save to Dropbox';
