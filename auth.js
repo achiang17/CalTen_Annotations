@@ -7,6 +7,16 @@ const TOKEN_KEY = 'calten_dbx_token';
 const SITE_PASSWORD = 'gobeavers';
 const DBX_APP_KEY = '47f7xjqlp9rwmxv';
 
+// Redirect URIs must exactly match what's configured in Dropbox App Console
+const DBX_REDIRECT_URIS = {
+  'localhost': 'http://localhost:8080/index.html',
+  'achiang17.github.io': 'https://achiang17.github.io/CalTen_Annotations/index.html',
+};
+
+function getRedirectUri() {
+  return DBX_REDIRECT_URIS[window.location.hostname] || (window.location.origin + window.location.pathname);
+}
+
 /**
  * Check if user is authenticated. Redirects to login if not.
  */
@@ -50,7 +60,7 @@ async function startDropboxOAuth() {
   sessionStorage.setItem('dbx_code_verifier', verifier);
 
   const challenge = await generateCodeChallenge(verifier);
-  const redirectUri = window.location.origin + window.location.pathname;
+  const redirectUri = getRedirectUri();
 
   const params = new URLSearchParams({
     client_id: DBX_APP_KEY,
@@ -68,7 +78,7 @@ async function exchangeCodeForToken(code) {
   const verifier = sessionStorage.getItem('dbx_code_verifier');
   if (!verifier) throw new Error('Missing code verifier');
 
-  const redirectUri = window.location.origin + window.location.pathname;
+  const redirectUri = getRedirectUri();
 
   const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
     method: 'POST',
