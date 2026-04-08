@@ -308,9 +308,21 @@ function buildVideoGrid() {
     labelEl.className = 'video-tile-label';
     labelEl.textContent = v.label;
 
+    // Minimize button
+    const minBtn = document.createElement('button');
+    minBtn.className = 'video-tile-minimize';
+    minBtn.title = 'Minimize';
+    minBtn.textContent = '−';
+    minBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      minimizeVideo(i);
+    });
+
     tile.appendChild(video);
     tile.appendChild(labelEl);
+    tile.appendChild(minBtn);
     tile.appendChild(volStrip);
+    tile.dataset.videoIdx = i;
     grid.appendChild(tile);
 
     // Click-to-annotate: click on video tile to start annotation flow
@@ -345,6 +357,9 @@ function buildVideoGrid() {
       document.getElementById('btn-play').textContent = 'Play';
     });
   });
+
+  // Set initial grid layout class
+  updateGridLayout();
 }
 
 function computeSyncedDuration() {
@@ -1254,6 +1269,88 @@ function cancelClickAnnotation() {
 function hideFrameStepperBar() {
   const existing = document.getElementById('frame-stepper-bar');
   if (existing) existing.remove();
+}
+
+// ── Step 9c: Video minimize / restore ────────────────────────
+
+function minimizeVideo(idx) {
+  const grid = document.getElementById('video-grid');
+  const tray = document.getElementById('minimized-tray');
+  const tile = grid.querySelector(`.video-tile[data-video-idx="${idx}"]`);
+  if (!tile) return;
+
+  // Move tile to tray
+  tile.classList.add('minimized');
+  tray.appendChild(tile);
+
+  // Create restore overlay
+  const restore = document.createElement('div');
+  restore.className = 'minimized-restore';
+  restore.innerHTML = `<span class="minimized-label">${state.videos[idx].label}</span><button class="minimized-restore-btn" title="Restore">+</button>`;
+  restore.querySelector('.minimized-restore-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    restoreVideo(idx);
+  });
+  // Also restore on clicking the minimized tile itself
+  restore.addEventListener('click', (e) => {
+    if (e.target.closest('.minimized-restore-btn')) return;
+    restoreVideo(idx);
+  });
+  tile.appendChild(restore);
+
+  updateGridLayout();
+}
+
+function restoreVideo(idx) {
+  const grid = document.getElementById('video-grid');
+  const tray = document.getElementById('minimized-tray');
+  const tile = tray.querySelector(`.video-tile[data-video-idx="${idx}"]`);
+  if (!tile) return;
+
+  // Remove restore overlay
+  const restore = tile.querySelector('.minimized-restore');
+  if (restore) restore.remove();
+
+  tile.classList.remove('minimized');
+
+  // Re-insert in correct order
+  const tiles = grid.querySelectorAll('.video-tile');
+  let inserted = false;
+  for (const existing of tiles) {
+    if (parseInt(existing.dataset.videoIdx) > idx) {
+      grid.insertBefore(tile, existing);
+      inserted = true;
+      break;
+    }
+  }
+  if (!inserted) grid.appendChild(tile);
+
+  updateGridLayout();
+}
+
+function updateGridLayout() {
+  const grid = document.getElementById('video-grid');
+  const tray = document.getElementById('minimized-tray');
+  const activeCount = grid.querySelectorAll('.video-tile').length;
+  const minimizedCount = tray.querySelectorAll('.video-tile').length;
+
+  // Update grid columns/rows based on active count
+  grid.classList.remove('grid-0', 'grid-1', 'grid-2', 'grid-3', 'grid-4');
+  const layoutCount = Math.min(activeCount, 4);
+  grid.classList.add(`grid-${layoutCount}`);
+
+  // Force grid to recalculate by briefly toggling display
+  grid.style.display = 'none';
+  // eslint-disable-next-line no-unused-expressions
+  grid.offsetHeight; // force reflow
+  grid.style.display = '';
+
+  // Show/hide tray
+  if (minimizedCount > 0) {
+    tray.classList.remove('hidden');
+  } else {
+    tray.classList.add('hidden');
+  }
 }
 
 // ── Step 10: Save to Dropbox ────────────────────────────────

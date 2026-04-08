@@ -58,6 +58,7 @@
           <li>Speed buttons — 0.5x, 1x, 2x playback speed</li>
           <li>Seek slider — Drag to jump to any point in the session</li>
           <li>Volume — Adjust per-video using the slider below each tile</li>
+          <li><strong>Minimize</strong> — Hover over a video and click the <strong>−</strong> button to shrink it to the tray. Click the minimized video or <strong>+</strong> to restore it. Remaining videos expand to fill the space.</li>
         </ul>
 
         <h3>Saving</h3>
@@ -84,6 +85,9 @@
       <div class="video-grid" id="video-grid">
         <!-- Tiles injected by viewer.js -->
       </div>
+
+      <!-- Minimized videos tray -->
+      <div class="minimized-tray hidden" id="minimized-tray"></div>
 
       <!-- Playback Controls -->
       <div class="controls-bar">
