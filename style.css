@@ -818,3 +818,163 @@ input[type="range"] {
   font-size: 11px;
   padding: 5px 10px;
 }
+
+/* ============================================================
+   Click-to-Annotate — Focused Tile
+   ============================================================ */
+.video-tile.click-focused {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.click-marker {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  color: #dc2626;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 24px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 20;
+  text-shadow:
+    -1px -1px 0 #fff,
+     1px -1px 0 #fff,
+    -1px  1px 0 #fff,
+     1px  1px 0 #fff,
+    0 0 6px rgba(220, 38, 38, 0.6);
+}
+
+/* ============================================================
+   Frame Stepper Bar (Click-to-Annotate)
+   ============================================================ */
+.frame-stepper-bar {
+  background: #eff6ff;
+  border-top: 1px solid #bfdbfe;
+  border-bottom: 1px solid #bfdbfe;
+  padding: 8px 14px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.frame-stepper-hint {
+  font-size: 11px;
+  color: #1e40af;
+  font-weight: 500;
+}
+
+.frame-stepper-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.frame-stepper-time {
+  font-size: 12px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  color: var(--color-text);
+  font-weight: 600;
+  min-width: 100px;
+  text-align: center;
+}
+
+.frame-stepper-mark {
+  font-size: 11px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  color: var(--color-muted);
+  min-width: 130px;
+}
+
+/* ============================================================
+   Info Modal
+   ============================================================ */
+.btn-info-toggle {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+.info-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.info-modal-overlay.hidden { display: none; }
+
+.info-modal {
+  background: var(--color-bg);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  width: 560px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.info-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.info-modal-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.info-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.info-modal-body h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 18px 0 8px;
+  color: var(--color-text);
+}
+
+.info-modal-body h3:first-child { margin-top: 0; }
+
+.info-modal-body ol,
+.info-modal-body ul {
+  padding-left: 20px;
+  margin-bottom: 8px;
+}
+
+.info-modal-body li { margin-bottom: 4px; }
+
+.info-modal-body kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.info-modal-body p {
+  margin-bottom: 8px;
+}

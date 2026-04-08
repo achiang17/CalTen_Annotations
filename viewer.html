@@ -10,8 +10,61 @@
 
   <header class="site-header">
     <h1 id="session-title">Loading session…</h1>
-    <a href="home.html" class="back-link">← Back to sessions</a>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <button class="btn btn-secondary btn-info-toggle" id="btn-info" title="How to annotate">?</button>
+      <a href="home.html" class="back-link">← Back to sessions</a>
+    </div>
   </header>
+
+  <!-- Info modal overlay -->
+  <div class="info-modal-overlay hidden" id="info-modal">
+    <div class="info-modal">
+      <div class="info-modal-header">
+        <h2>How to Annotate</h2>
+        <button class="btn btn-danger" id="btn-info-close" title="Close">✕</button>
+      </div>
+      <div class="info-modal-body">
+        <h3>Click-to-Annotate (Action Annotations)</h3>
+        <ol>
+          <li><strong>Click on a player</strong> in any video tile. All videos pause and a red marker appears where you clicked.</li>
+          <li>Use <kbd>←</kbd> <kbd>→</kbd> arrow keys (or the step buttons) to move frame-by-frame.</li>
+          <li>Press <kbd>S</kbd> or click <strong>Mark Start</strong> to set the start frame.</li>
+          <li>Step to the end frame, then press <kbd>E</kbd> or click <strong>Mark End</strong>.</li>
+          <li>Press <kbd>Enter</kbd> or click <strong>Confirm</strong> to open the annotation form.</li>
+          <li>You can <strong>reposition the marker</strong> by clicking a different spot on the video before confirming.</li>
+          <li>Press <kbd>Esc</kbd> or click <strong>Cancel</strong> to abort and resume playback.</li>
+        </ol>
+
+        <h3>Drill Annotations (S/E Shortcut)</h3>
+        <ol>
+          <li>While the video is playing, press <kbd>S</kbd> to mark the start time.</li>
+          <li>Press <kbd>E</kbd> to mark the end time.</li>
+          <li>The annotation form appears automatically.</li>
+          <li>Select a <strong>Drill</strong> type instead of an Action (or both).</li>
+        </ol>
+
+        <h3>Annotation Form</h3>
+        <ul>
+          <li><strong>Player</strong> — Select the player from the roster dropdown.</li>
+          <li><strong>Action</strong> — Choose the stroke type (forehand, backhand, serve, etc.) or "None" for drill-only annotations.</li>
+          <li><strong>Drill</strong> — Optionally select a drill type: Ground Strokes, Net Play, or Serves.</li>
+          <li><strong>Perfect stroke</strong> — Check this box if the stroke was executed perfectly.</li>
+          <li><strong>Notes</strong> — Add any free-form observations.</li>
+        </ul>
+
+        <h3>Playback Controls</h3>
+        <ul>
+          <li><kbd>Space</kbd> — Play / Pause all videos</li>
+          <li>Speed buttons — 0.5x, 1x, 2x playback speed</li>
+          <li>Seek slider — Drag to jump to any point in the session</li>
+          <li>Volume — Adjust per-video using the slider below each tile</li>
+        </ul>
+
+        <h3>Saving</h3>
+        <p>Click <strong>Save to Dropbox</strong> to upload your annotations. They are saved as both JSON and CSV, and will auto-load next time you open this session.</p>
+      </div>
+    </div>
+  </div>
 
   <div class="viewer-layout">
 

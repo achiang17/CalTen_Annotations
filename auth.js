@@ -50,7 +50,7 @@ async function startDropboxOAuth() {
   sessionStorage.setItem('dbx_code_verifier', verifier);
 
   const challenge = await generateCodeChallenge(verifier);
-  const redirectUri = window.location.origin + window.location.pathname;
+  const redirectUri = window.location.origin;
 
   const params = new URLSearchParams({
     client_id: DBX_APP_KEY,
@@ -68,7 +68,7 @@ async function exchangeCodeForToken(code) {
   const verifier = sessionStorage.getItem('dbx_code_verifier');
   if (!verifier) throw new Error('Missing code verifier');
 
-  const redirectUri = window.location.origin + window.location.pathname;
+  const redirectUri = window.location.origin;
 
   const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
     method: 'POST',

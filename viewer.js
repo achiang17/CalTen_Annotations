@@ -20,6 +20,11 @@ const state = {
   pendingStart:    null, // synced ms
   pendingEnd:      null, // synced ms
   config:          null,
+  // Click-to-annotate state
+  focusIdx:          0,
+  clickAnnotating:   false,
+  clickCoords:       null,   // { x: 0-1, y: 0-1 }
+  clickSyncedMs:     null,
 };
 
 // ── Dropbox API helpers ─────────────────────────────────────
@@ -308,6 +313,14 @@ function buildVideoGrid() {
     tile.appendChild(volStrip);
     grid.appendChild(tile);
 
+    // Click-to-annotate: click on video tile to start annotation flow
+    tile.addEventListener('click', (e) => {
+      if (state.calibrating) return;
+      // Don't trigger on volume strip interactions
+      if (e.target.closest('.video-tile-volume')) return;
+      handleVideoTileClick(e, i);
+    });
+
     // Apply offset once metadata is available
     video.addEventListener('loadedmetadata', () => {
       video.currentTime = totalOffsetSec(v);
@@ -469,6 +482,41 @@ function wireControls() {
       return; // Block all other shortcuts during calibration
     }
 
+    // Click-to-annotate mode: arrow keys step frames, S/E mark times
+    if (state.clickAnnotating) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelClickAnnotation();
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        clickAnnotateStepFrame(-1);
+        return;
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        clickAnnotateStepFrame(1);
+        return;
+      }
+      if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        clickAnnotateMarkStart();
+        return;
+      }
+      if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        clickAnnotateMarkEnd();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        confirmClickAnnotateRange();
+        return;
+      }
+      return;
+    }
+
     // Enter confirms annotation when form is visible
     if (e.key === 'Enter') {
       const form = document.getElementById('annotation-form');
@@ -495,10 +543,22 @@ function wireControls() {
   // Calibration buttons
   document.getElementById('btn-confirm-calibration').addEventListener('click', hideCalibration);
   document.getElementById('btn-recalibrate').addEventListener('click', showCalibration);
+
+  // Info modal
+  const infoModal = document.getElementById('info-modal');
+  document.getElementById('btn-info').addEventListener('click', () => {
+    infoModal.classList.remove('hidden');
+  });
+  document.getElementById('btn-info-close').addEventListener('click', () => {
+    infoModal.classList.add('hidden');
+  });
+  infoModal.addEventListener('click', (e) => {
+    if (e.target === infoModal) infoModal.classList.add('hidden');
+  });
 }
 
 function togglePlay() {
-  if (state.calibrating) return;
+  if (state.calibrating || state.clickAnnotating) return;
   const videos = state.videos.map(v => v.el).filter(Boolean);
   if (videos.length === 0) return;
   const anyPlaying = videos.some(v => !v.paused);
@@ -811,6 +871,9 @@ function confirmAnnotation() {
   const notes      = document.getElementById('form-notes').value.trim();
   const perfect    = document.getElementById('form-perfect').checked;
 
+  const wasClickAnnotation = state.clickAnnotating;
+  const resumeMs = state.pendingEnd;
+
   const annotation = {
     id:          state.nextId++,
     start_time:  formatTime(state.pendingStart / 1000),
@@ -826,6 +889,13 @@ function confirmAnnotation() {
     session:     state.folderKey,
   };
 
+  // Add click coordinates if this was a click-to-annotate flow
+  if (state.clickCoords) {
+    annotation.click_x = Math.round(state.clickCoords.x * 10000) / 10000;
+    annotation.click_y = Math.round(state.clickCoords.y * 10000) / 10000;
+    annotation.click_video = state.videos[state.focusIdx]?.filename || '';
+  }
+
   state.annotations.push(annotation);
   renderAnnotationList();
 
@@ -837,9 +907,24 @@ function confirmAnnotation() {
   document.getElementById('btn-mark-start').classList.remove('active');
   document.getElementById('btn-mark-end').classList.remove('active');
   hideAnnotationForm();
+
+  // If click-to-annotate, clean up and auto-resume playback
+  if (wasClickAnnotation) {
+    removeClickMarker();
+    state.clickAnnotating = false;
+    state.clickCoords = null;
+    state.clickSyncedMs = null;
+    document.querySelectorAll('.video-tile').forEach(t => t.classList.remove('click-focused'));
+    seekAll(resumeMs / 1000);
+    setTimeout(() => {
+      const videos = state.videos.map(v => v.el).filter(Boolean);
+      syncedPlay(videos);
+    }, 200);
+  }
 }
 
 function cancelAnnotation() {
+  const wasClick = state.clickAnnotating;
   state.pendingStart = null;
   state.pendingEnd   = null;
   document.getElementById('display-start').textContent = '—';
@@ -847,6 +932,19 @@ function cancelAnnotation() {
   document.getElementById('btn-mark-start').classList.remove('active');
   document.getElementById('btn-mark-end').classList.remove('active');
   hideAnnotationForm();
+
+  // If click-to-annotate, clean up and resume playback
+  if (wasClick) {
+    removeClickMarker();
+    state.clickAnnotating = false;
+    state.clickCoords = null;
+    state.clickSyncedMs = null;
+    document.querySelectorAll('.video-tile').forEach(t => t.classList.remove('click-focused'));
+    setTimeout(() => {
+      const videos = state.videos.map(v => v.el).filter(Boolean);
+      syncedPlay(videos);
+    }, 200);
+  }
 }
 
 function deleteAnnotation(id) {
@@ -860,7 +958,7 @@ function renderAnnotationList() {
   count.textContent = state.annotations.length;
 
   if (state.annotations.length === 0) {
-    list.innerHTML = '<div class="empty-state">No annotations yet.<br>Press S to mark a start time.</div>';
+    list.innerHTML = '<div class="empty-state">No annotations yet.<br>Click on a video to annotate, or press S for drill annotations.</div>';
     return;
   }
 
@@ -909,6 +1007,253 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// ── Step 9b: Click-to-annotate system ────────────────────────
+
+function computeVideoClickCoords(event, videoElement) {
+  const rect = videoElement.getBoundingClientRect();
+  const clickX = event.clientX - rect.left;
+  const clickY = event.clientY - rect.top;
+  const elemW = rect.width;
+  const elemH = rect.height;
+  const vidW = videoElement.videoWidth;
+  const vidH = videoElement.videoHeight;
+  if (!vidW || !vidH) return null;
+
+  const elemAspect = elemW / elemH;
+  const vidAspect = vidW / vidH;
+  let renderW, renderH, offsetX, offsetY;
+
+  if (vidAspect > elemAspect) {
+    renderW = elemW;
+    renderH = elemW / vidAspect;
+    offsetX = 0;
+    offsetY = (elemH - renderH) / 2;
+  } else {
+    renderH = elemH;
+    renderW = elemH * vidAspect;
+    offsetX = (elemW - renderW) / 2;
+    offsetY = 0;
+  }
+
+  const relX = (clickX - offsetX) / renderW;
+  const relY = (clickY - offsetY) / renderH;
+  return {
+    x: Math.max(0, Math.min(1, relX)),
+    y: Math.max(0, Math.min(1, relY)),
+  };
+}
+
+function handleVideoTileClick(event, tileIndex) {
+  if (state.clickAnnotating) return;
+  const form = document.getElementById('annotation-form');
+  if (form && !form.classList.contains('hidden')) return;
+  const v = state.videos[tileIndex];
+  if (!v || !v.el || v.el.readyState < 1) return;
+
+  // Pause all videos
+  state.videos.forEach(sv => sv.el && sv.el.pause());
+  document.getElementById('btn-play').textContent = 'Play';
+
+  // Capture click coords
+  const coords = computeVideoClickCoords(event, v.el);
+  if (!coords) return;
+
+  state.clickAnnotating = true;
+  state.clickCoords = coords;
+  state.clickSyncedMs = getSyncedTime() * 1000;
+  state.focusIdx = tileIndex;
+
+  // Visual focus on clicked tile
+  document.querySelectorAll('.video-tile').forEach(t => t.classList.remove('click-focused'));
+  const tile = document.querySelectorAll('.video-tile')[tileIndex];
+  if (tile) tile.classList.add('click-focused');
+
+  // Show red X marker at click position
+  showClickMarker(tile, v.el, coords);
+
+  showFrameStepperBar();
+}
+
+function showClickMarker(tile, videoEl, coords) {
+  removeClickMarker();
+
+  const marker = document.createElement('div');
+  marker.className = 'click-marker';
+  marker.id = 'click-marker';
+  marker.textContent = '✕';
+  tile.appendChild(marker);
+
+  positionClickMarker(marker, videoEl, coords);
+
+  // Allow repositioning by clicking on the video tile
+  tile._clickMarkerHandler = (e) => {
+    if (e.target.closest('.video-tile-volume')) return;
+    if (e.target.closest('.click-marker')) return;
+    const newCoords = computeVideoClickCoords(e, videoEl);
+    if (newCoords) {
+      state.clickCoords = newCoords;
+      positionClickMarker(marker, videoEl, newCoords);
+    }
+  };
+  tile.addEventListener('click', tile._clickMarkerHandler);
+}
+
+function positionClickMarker(marker, videoEl, coords) {
+  const rect = videoEl.getBoundingClientRect();
+  const tileRect = videoEl.closest('.video-tile').getBoundingClientRect();
+  const vidW = videoEl.videoWidth;
+  const vidH = videoEl.videoHeight;
+  if (!vidW || !vidH) return;
+
+  const elemW = rect.width;
+  const elemH = rect.height;
+  const elemAspect = elemW / elemH;
+  const vidAspect = vidW / vidH;
+  let renderW, renderH, offsetX, offsetY;
+
+  if (vidAspect > elemAspect) {
+    renderW = elemW;
+    renderH = elemW / vidAspect;
+    offsetX = 0;
+    offsetY = (elemH - renderH) / 2;
+  } else {
+    renderH = elemH;
+    renderW = elemH * vidAspect;
+    offsetX = (elemW - renderW) / 2;
+    offsetY = 0;
+  }
+
+  // Position relative to tile (video may have offset from tile due to flex layout)
+  const videoOffsetTop = rect.top - tileRect.top;
+  const videoOffsetLeft = rect.left - tileRect.left;
+
+  const px = videoOffsetLeft + offsetX + coords.x * renderW;
+  const py = videoOffsetTop + offsetY + coords.y * renderH;
+
+  marker.style.left = px + 'px';
+  marker.style.top = py + 'px';
+}
+
+function removeClickMarker() {
+  const marker = document.getElementById('click-marker');
+  if (marker) {
+    const tile = marker.closest('.video-tile');
+    if (tile && tile._clickMarkerHandler) {
+      tile.removeEventListener('click', tile._clickMarkerHandler);
+      delete tile._clickMarkerHandler;
+    }
+    marker.remove();
+  }
+}
+
+function showFrameStepperBar() {
+  hideFrameStepperBar();
+
+  const bar = document.createElement('div');
+  bar.className = 'frame-stepper-bar';
+  bar.id = 'frame-stepper-bar';
+
+  bar.innerHTML = `
+    <div class="frame-stepper-hint">
+      Use ← → arrow keys to step frames, then mark start &amp; end
+    </div>
+    <div class="frame-stepper-controls">
+      <button class="btn btn-secondary" id="btn-step-back" title="Step back 1 frame (←)">◀ -1f</button>
+      <span class="frame-stepper-time" id="frame-stepper-time">${formatTime(state.clickSyncedMs / 1000)}</span>
+      <button class="btn btn-secondary" id="btn-step-fwd" title="Step forward 1 frame (→)">+1f ▶</button>
+      <button class="btn btn-mark-start" id="btn-click-mark-start" title="Mark start (S)">Mark Start</button>
+      <span class="frame-stepper-mark" id="frame-stepper-start">Start: —</span>
+      <button class="btn btn-mark-end" id="btn-click-mark-end" title="Mark end (E)">Mark End</button>
+      <span class="frame-stepper-mark" id="frame-stepper-end">End: —</span>
+      <button class="btn btn-primary" id="btn-click-confirm" disabled title="Confirm range (Enter)">Confirm</button>
+      <button class="btn btn-secondary" id="btn-click-cancel" title="Cancel (Esc)">Cancel</button>
+    </div>
+  `;
+
+  const viewerLeft = document.querySelector('.viewer-left');
+  const controlsBar = document.querySelector('.controls-bar');
+  viewerLeft.insertBefore(bar, controlsBar);
+
+  document.getElementById('btn-step-back').addEventListener('click', () => clickAnnotateStepFrame(-1));
+  document.getElementById('btn-step-fwd').addEventListener('click', () => clickAnnotateStepFrame(1));
+  document.getElementById('btn-click-mark-start').addEventListener('click', clickAnnotateMarkStart);
+  document.getElementById('btn-click-mark-end').addEventListener('click', clickAnnotateMarkEnd);
+  document.getElementById('btn-click-confirm').addEventListener('click', confirmClickAnnotateRange);
+  document.getElementById('btn-click-cancel').addEventListener('click', cancelClickAnnotation);
+}
+
+function clickAnnotateStepFrame(direction) {
+  const FRAME_STEP = 1 / 60; // ~16.67ms per frame at 60fps
+  const syncedSec = getSyncedTime() + direction * FRAME_STEP;
+  const clamped = Math.max(0, Math.min(syncedSec, state.syncedDuration));
+  seekAll(clamped);
+  // Update current time display in stepper
+  const timeEl = document.getElementById('frame-stepper-time');
+  if (timeEl) timeEl.textContent = formatTime(clamped);
+}
+
+function clickAnnotateMarkStart() {
+  state.pendingStart = getSyncedTime() * 1000;
+  const el = document.getElementById('frame-stepper-start');
+  if (el) el.textContent = 'Start: ' + formatTime(state.pendingStart / 1000);
+  document.getElementById('btn-click-mark-start')?.classList.add('active');
+  updateClickConfirmButton();
+}
+
+function clickAnnotateMarkEnd() {
+  state.pendingEnd = getSyncedTime() * 1000;
+  // Auto-swap if end < start
+  if (state.pendingStart !== null && state.pendingEnd < state.pendingStart) {
+    [state.pendingStart, state.pendingEnd] = [state.pendingEnd, state.pendingStart];
+    const startEl = document.getElementById('frame-stepper-start');
+    if (startEl) startEl.textContent = 'Start: ' + formatTime(state.pendingStart / 1000);
+  }
+  const el = document.getElementById('frame-stepper-end');
+  if (el) el.textContent = 'End: ' + formatTime(state.pendingEnd / 1000);
+  document.getElementById('btn-click-mark-end')?.classList.add('active');
+  updateClickConfirmButton();
+}
+
+function updateClickConfirmButton() {
+  const btn = document.getElementById('btn-click-confirm');
+  if (btn) btn.disabled = !(state.pendingStart !== null && state.pendingEnd !== null);
+}
+
+function confirmClickAnnotateRange() {
+  if (state.pendingStart === null || state.pendingEnd === null) return;
+
+  // Update the annotation panel displays
+  document.getElementById('display-start').textContent = formatTime(state.pendingStart / 1000);
+  document.getElementById('display-end').textContent = formatTime(state.pendingEnd / 1000);
+  document.getElementById('btn-mark-start').classList.add('active');
+  document.getElementById('btn-mark-end').classList.add('active');
+
+  hideFrameStepperBar();
+  showAnnotationForm();
+}
+
+function cancelClickAnnotation() {
+  hideFrameStepperBar();
+  removeClickMarker();
+  state.clickAnnotating = false;
+  state.clickCoords = null;
+  state.clickSyncedMs = null;
+  state.pendingStart = null;
+  state.pendingEnd = null;
+  document.querySelectorAll('.video-tile').forEach(t => t.classList.remove('click-focused'));
+
+  // Resume playback
+  setTimeout(() => {
+    const videos = state.videos.map(v => v.el).filter(Boolean);
+    syncedPlay(videos);
+  }, 200);
+}
+
+function hideFrameStepperBar() {
+  const existing = document.getElementById('frame-stepper-bar');
+  if (existing) existing.remove();
 }
 
 // ── Step 10: Save to Dropbox ────────────────────────────────
@@ -966,7 +1311,7 @@ async function saveToDropbox() {
   const jsonPath = `${folderPath}/${state.folderKey}_annotations.json`;
 
   // Build CSV
-  const cols = ['session','start_time','end_time','player_id','player_name','action_id','drill','perfect','notes','annotator','created_at'];
+  const cols = ['session','start_time','end_time','player_id','player_name','action_id','drill','perfect','notes','annotator','created_at','click_x','click_y','click_video'];
   const rows = [cols.join(',')];
   state.annotations.forEach(a => {
     rows.push(cols.map(c => csvEscape(String(a[c] ?? ''))).join(','));
