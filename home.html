@@ -21,6 +21,14 @@
           <label for="annotator-name" style="display:block; font-size: 14px; font-weight: 500; margin-bottom: 6px;">Your Name (Annotator)</label>
           <input type="text" id="annotator-name" class="login-input" placeholder="Enter your name" style="max-width: 320px;" />
         </div>
+        <div style="margin-bottom: 16px;">
+          <label for="dropbox-folder" style="display:block; font-size: 14px; font-weight: 500; margin-bottom: 6px;">Dropbox Folder Path</label>
+          <div style="display:flex; gap:8px; align-items:center; max-width:480px;">
+            <input type="text" id="dropbox-folder" class="login-input" placeholder="/full_dataset" style="flex:1;" />
+            <button class="btn btn-primary" id="btn-reload-sessions" style="flex-shrink:0;">Load Sessions</button>
+          </div>
+          <span style="font-size:11px; color:#6b7280;">The path to your shared video folder in Dropbox (e.g. /full_dataset)</span>
+        </div>
         <div style="margin-bottom: 0;">
           <label for="roster-select" style="font-size: 14px; font-weight: 500; margin-right: 8px;">Team:</label>
           <select id="roster-select" class="roster-dropdown">

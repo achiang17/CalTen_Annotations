@@ -3,6 +3,8 @@
    ============================================================ */
 
 // ── Module state ────────────────────────────────────────────
+const DROPBOX_FOLDER = sessionStorage.getItem('calten_dbx_folder') || '/full_dataset';
+
 const state = {
   folderKey:       '',
   sessionLabel:    '',
@@ -114,7 +116,6 @@ function loadViewerRoster(team) {
   state.config = config;
 
   const DROPBOX_TOKEN = getDropboxToken();
-  const DROPBOX_FOLDER = '/full_dataset';
 
   if (!DROPBOX_TOKEN) {
     setStatus('No Dropbox token found in config.json.');
@@ -780,7 +781,7 @@ async function saveCalibrationToDropbox() {
     calibration: calibration,
   }, null, 2);
 
-  const path = `/full_dataset/${state.folderKey}/${state.folderKey}_calibration.json`;
+  const path = `${DROPBOX_FOLDER}/${state.folderKey}/${state.folderKey}_calibration.json`;
 
   try {
     await dbxUpload(token, path, data);
@@ -1396,7 +1397,7 @@ async function saveToDropbox() {
     return;
   }
 
-  const folderPath = `/full_dataset/${state.folderKey}`;
+  const folderPath = `${DROPBOX_FOLDER}/${state.folderKey}`;
 
   // Build JSON (canonical format — this file gets auto-loaded next time)
   const jsonData = {
