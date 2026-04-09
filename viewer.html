@@ -24,23 +24,26 @@
         <button class="btn btn-danger" id="btn-info-close" title="Close">✕</button>
       </div>
       <div class="info-modal-body">
-        <h3>Click-to-Annotate (Action Annotations)</h3>
+        <h3>Stroke Annotation (Click on Player)</h3>
+        <p>Use this to annotate a specific stroke by a specific player.</p>
         <ol>
-          <li><strong>Click on a player</strong> in any video tile. All videos pause and a red marker appears where you clicked.</li>
-          <li>Use <kbd>←</kbd> <kbd>→</kbd> arrow keys (or the step buttons) to move frame-by-frame.</li>
-          <li>Press <kbd>S</kbd> or click <strong>Mark Start</strong> to set the start frame.</li>
-          <li>Step to the end frame, then press <kbd>E</kbd> or click <strong>Mark End</strong>.</li>
-          <li>Press <kbd>Enter</kbd> or click <strong>Confirm</strong> to open the annotation form.</li>
-          <li>You can <strong>reposition the marker</strong> by clicking a different spot on the video before confirming.</li>
-          <li>Press <kbd>Esc</kbd> or click <strong>Cancel</strong> to abort and resume playback.</li>
+          <li><strong>Click on a player</strong> in any video tile. All videos pause and a red marker appears where you clicked. You can reposition the marker by clicking elsewhere on the video.</li>
+          <li>Use <kbd>←</kbd> <kbd>→</kbd> arrow keys to step frame-by-frame to find the start of the stroke.</li>
+          <li>Press <kbd>S</kbd> to mark the start frame. The video will begin playing at <strong>0.5x speed</strong>.</li>
+          <li>Use <kbd>Space</kbd> to pause/resume playback while watching the stroke.</li>
+          <li>Press <kbd>E</kbd> to mark the end frame. The video pauses.</li>
+          <li>Use <kbd>←</kbd> <kbd>→</kbd> to fine-tune the end position frame-by-frame if needed.</li>
+          <li>Press <kbd>Enter</kbd> to confirm and open the annotation form.</li>
+          <li>Press <kbd>Esc</kbd> at any time to cancel and resume normal playback.</li>
         </ol>
 
-        <h3>Drill Annotations (S/E Shortcut)</h3>
+        <h3>Drill Annotation (S/E Time Range)</h3>
+        <p>Use this to annotate a drill segment without marking a specific player position.</p>
         <ol>
-          <li>While the video is playing, press <kbd>S</kbd> to mark the start time.</li>
-          <li>Press <kbd>E</kbd> to mark the end time.</li>
+          <li>While the video is playing, press <kbd>S</kbd> or click <strong>Drill Start</strong> to mark the start time.</li>
+          <li>Press <kbd>E</kbd> or click <strong>Drill End</strong> to mark the end time.</li>
           <li>The annotation form appears automatically.</li>
-          <li>Select a <strong>Drill</strong> type instead of an Action (or both).</li>
+          <li>Select a <strong>Drill</strong> type (Ground Strokes, Net Play, or Serves). Action can be set to "None" for drill-only annotations.</li>
         </ol>
 
         <h3>Annotation Form</h3>
@@ -124,14 +127,20 @@
           </select>
         </div>
 
-        <!-- Mark buttons + time readout -->
+        <!-- Annotation mode hints -->
         <div class="annotation-controls">
+          <div class="annotation-mode-hint">
+            <span class="mode-label mode-stroke">Stroke annotation:</span> Click on a player in the video
+          </div>
+          <div class="annotation-mode-hint">
+            <span class="mode-label mode-drill">Drill annotation:</span> Press <kbd>S</kbd> / <kbd>E</kbd> to mark a time range
+          </div>
           <div class="mark-buttons">
             <button class="btn btn-mark-start" id="btn-mark-start">
-              ⬤ Mark Start &nbsp;<kbd>S</kbd>
+              ⬤ Drill Start &nbsp;<kbd>S</kbd>
             </button>
             <button class="btn btn-mark-end" id="btn-mark-end">
-              ⬤ Mark End &nbsp;<kbd>E</kbd>
+              ⬤ Drill End &nbsp;<kbd>E</kbd>
             </button>
           </div>
           <div class="mark-time-display">

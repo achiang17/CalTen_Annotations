@@ -27,6 +27,10 @@ const state = {
   clickAnnotating:   false,
   clickCoords:       null,   // { x: 0-1, y: 0-1 }
   clickSyncedMs:     null,
+  // Annotation replay loop state
+  replayLoop:        null,   // { startSec, endSec, annotationId } or null
+  replayInterval:    null,   // setInterval id for loop check
+  _replayLoopId:     0,      // monotonic id to cancel stale callbacks
 };
 
 // ── Dropbox API helpers ─────────────────────────────────────
@@ -142,12 +146,13 @@ function loadViewerRoster(team) {
     return;
   }
 
+  // Find .MOV video files only
   const videoFiles = folderEntries
     .filter(e => e['.tag'] === 'file' && /\.mov$/i.test(e.name))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   if (videoFiles.length === 0) {
-    setStatus('No .MOV files found in this session folder.');
+    setStatus('No video files found in this session folder.');
     return;
   }
 
@@ -446,6 +451,7 @@ function wireControls() {
   const seekTooltip = document.getElementById('seek-tooltip');
 
   slider.addEventListener('input', () => {
+    if (state.replayLoop) stopReplayLoop();
     seekAll(parseInt(slider.value, 10) / 1000);
   });
 
@@ -498,13 +504,21 @@ function wireControls() {
       return; // Block all other shortcuts during calibration
     }
 
-    // Click-to-annotate mode: arrow keys step frames, S/E mark times
+    // Stop replay loop on Escape
+    if (state.replayLoop && e.key === 'Escape') {
+      e.preventDefault();
+      stopReplayLoop();
+      return;
+    }
+
+    // Click-to-annotate mode
     if (state.clickAnnotating) {
       if (e.key === 'Escape') {
         e.preventDefault();
         cancelClickAnnotation();
         return;
       }
+      // Arrow keys: step frames (only before start is marked, or after end is marked for adjustment)
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
         clickAnnotateStepFrame(-1);
@@ -515,16 +529,25 @@ function wireControls() {
         clickAnnotateStepFrame(1);
         return;
       }
-      if (e.key === 's' || e.key === 'S') {
+      // S: mark start (only if not already marked)
+      if ((e.key === 's' || e.key === 'S') && state.pendingStart === null) {
         e.preventDefault();
         clickAnnotateMarkStart();
         return;
       }
-      if (e.key === 'e' || e.key === 'E') {
+      // E: mark end (only after start is marked)
+      if ((e.key === 'e' || e.key === 'E') && state.pendingStart !== null && state.pendingEnd === null) {
         e.preventDefault();
         clickAnnotateMarkEnd();
         return;
       }
+      // Space: toggle play/pause (after start is marked, before end is marked)
+      if (e.key === ' ' && state.pendingStart !== null && state.pendingEnd === null) {
+        e.preventDefault();
+        clickAnnotateTogglePlay();
+        return;
+      }
+      // Enter: confirm (after both marked)
       if (e.key === 'Enter') {
         e.preventDefault();
         confirmClickAnnotateRange();
@@ -575,6 +598,11 @@ function wireControls() {
 
 function togglePlay() {
   if (state.calibrating || state.clickAnnotating) return;
+  // If replay loop is active, stop it on manual play/pause
+  if (state.replayLoop) {
+    stopReplayLoop();
+    return;
+  }
   const videos = state.videos.map(v => v.el).filter(Boolean);
   if (videos.length === 0) return;
   const anyPlaying = videos.some(v => !v.paused);
@@ -586,11 +614,15 @@ function togglePlay() {
   }
 }
 
+/** Cancel token for syncedPlay buffering loop */
+let _syncedPlayId = 0;
+
 /**
  * Wait for all videos to be buffered enough, re-align,
  * then start them in a single requestAnimationFrame for tight sync.
  */
 function syncedPlay(videos) {
+  const playId = ++_syncedPlayId;
   const btn = document.getElementById('btn-play');
 
   // Re-align all videos to the current synced position
@@ -606,9 +638,17 @@ function syncedPlay(videos) {
     btn.disabled = true;
 
     function checkReady() {
+      // Abort if a newer syncedPlay call was made or videos were paused
+      if (_syncedPlayId !== playId) return;
       if (videos.every(v => v.readyState >= 3)) {
         btn.textContent = 'Play';
         btn.disabled = false;
+        if (_syncedPlayId !== playId) return;
+        requestAnimationFrame(() => {
+          if (_syncedPlayId !== playId) return;
+          videos.forEach(v => v.play().catch(() => {}));
+          btn.textContent = 'Pause';
+        });
       } else {
         setTimeout(checkReady, 50);
       }
@@ -619,9 +659,15 @@ function syncedPlay(videos) {
 
   // All ready — fire all play() calls in one rAF for tightest sync
   requestAnimationFrame(() => {
+    if (_syncedPlayId !== playId) return;
     videos.forEach(v => v.play().catch(() => {}));
     btn.textContent = 'Pause';
   });
+}
+
+/** Cancel any pending syncedPlay buffering loop */
+function cancelSyncedPlay() {
+  _syncedPlayId++;
 }
 
 /** Periodic drift correction — called from the poll interval in wireControls */
@@ -909,6 +955,7 @@ function confirmAnnotation() {
   if (state.clickCoords) {
     annotation.click_x = Math.round(state.clickCoords.x * 10000) / 10000;
     annotation.click_y = Math.round(state.clickCoords.y * 10000) / 10000;
+    annotation.click_time = formatTime(state.clickSyncedMs / 1000);
     annotation.click_video = state.videos[state.focusIdx]?.filename || '';
   }
 
@@ -931,6 +978,10 @@ function confirmAnnotation() {
     state.clickCoords = null;
     state.clickSyncedMs = null;
     document.querySelectorAll('.video-tile').forEach(t => t.classList.remove('click-focused'));
+    // Restore playback rate
+    const activeSpeed = document.querySelector('.btn-speed.active');
+    const rate = activeSpeed ? parseFloat(activeSpeed.dataset.speed) : 1;
+    state.videos.forEach(v => { if (v.el) v.el.playbackRate = rate; });
     seekAll(resumeMs / 1000);
     setTimeout(() => {
       const videos = state.videos.map(v => v.el).filter(Boolean);
@@ -985,7 +1036,7 @@ function renderAnnotationList() {
     row.className = `annotation-row action-${a.action_id}`;
     row.innerHTML = `
       <div class="annotation-row-body">
-        <div class="annotation-row-times">${a.start_time} → ${a.end_time}</div>
+        <div class="annotation-row-times">${a.start_time} → ${a.end_time}${a.click_time ? ` <span class="annotation-row-clicktime">click @ ${a.click_time}</span>` : ''}</div>
         <div class="annotation-row-meta">
           <span class="annotation-row-player">${a.player_id}${a.player_name ? ' — ' + a.player_name : ''}</span>
           <span class="annotation-row-action badge-${a.action_id}">${a.action_id.replace(/_/g,' ')}</span>
@@ -998,11 +1049,12 @@ function renderAnnotationList() {
       <button class="btn btn-danger" data-id="${a.id}">✕</button>
     `;
 
-    // Seek to annotation start on row click (but not delete button)
+    // Click annotation row to start replay loop
     row.addEventListener('click', e => {
       if (e.target.closest('.btn-danger')) return;
       const startSec = timeStringToSeconds(a.start_time);
-      seekAll(startSec);
+      const endSec = timeStringToSeconds(a.end_time);
+      startReplayLoop(startSec, endSec, a.id);
     });
 
     row.querySelector('.btn-danger').addEventListener('click', () => deleteAnnotation(a.id));
@@ -1023,6 +1075,133 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// ── Annotation replay loop ──────────────────────────────────
+
+function startReplayLoop(startSec, endSec, annotationId) {
+  // If already looping same annotation, stop it
+  if (state.replayLoop && state.replayLoop.annotationId === annotationId) {
+    stopReplayLoop();
+    return;
+  }
+
+  // Stop any existing loop first
+  if (state.replayLoop) stopReplayLoop();
+
+  // Cancel any click-annotating in progress
+  if (state.clickAnnotating) cancelClickAnnotation();
+
+  state.replayLoop = { startSec, endSec, annotationId };
+
+  // Seek to start and play
+  seekAll(startSec);
+  showReplayBar(startSec, endSec);
+
+  // Start playing after a short delay for seek to settle
+  setTimeout(() => {
+    const videos = state.videos.map(v => v.el).filter(Boolean);
+    syncedPlay(videos);
+  }, 100);
+
+  // Poll to check if we've reached the end → loop back
+  const loopId = ++state._replayLoopId;
+  state.replayInterval = setInterval(() => {
+    if (!state.replayLoop || state._replayLoopId !== loopId) return;
+    const current = getSyncedTime();
+    if (current >= state.replayLoop.endSec) {
+      seekAll(state.replayLoop.startSec);
+      setTimeout(() => {
+        if (!state.replayLoop || state._replayLoopId !== loopId) return;
+        const videos = state.videos.map(v => v.el).filter(Boolean);
+        syncedPlay(videos);
+      }, 100);
+    }
+  }, 50);
+
+  // Highlight the active annotation row
+  document.querySelectorAll('.annotation-row').forEach(r => r.classList.remove('replay-active'));
+  const rows = document.querySelectorAll('.annotation-row');
+  rows.forEach(r => {
+    const btn = r.querySelector('[data-id]');
+    if (btn && parseInt(btn.dataset.id) === annotationId) {
+      r.classList.add('replay-active');
+    }
+  });
+}
+
+function stopReplayLoop() {
+  // Increment loop ID to cancel any pending setTimeout callbacks
+  state._replayLoopId++;
+
+  if (state.replayInterval) {
+    clearInterval(state.replayInterval);
+    state.replayInterval = null;
+  }
+
+  // Cancel any pending syncedPlay buffering loops
+  cancelSyncedPlay();
+
+  // Capture end position before clearing state
+  const endSec = state.replayLoop ? state.replayLoop.endSec : null;
+
+  state.replayLoop = null;
+
+  // Remove UI first (before querying .btn-speed, since replay bar also has .btn-speed buttons)
+  hideReplayBar();
+  document.querySelectorAll('.annotation-row.replay-active').forEach(r => r.classList.remove('replay-active'));
+
+  // Restore playback rate (query after replay bar is removed to avoid matching its speed buttons)
+  const activeSpeed = document.querySelector('.btn-speed.active');
+  const rate = activeSpeed ? parseFloat(activeSpeed.dataset.speed) : 1;
+  state.videos.forEach(v => { if (v.el) v.el.playbackRate = rate; });
+
+  // Seek to end of annotation and continue playing
+  if (endSec !== null) {
+    seekAll(endSec);
+    setTimeout(() => {
+      const videos = state.videos.map(v => v.el).filter(Boolean);
+      syncedPlay(videos);
+    }, 150);
+  }
+}
+
+function showReplayBar(startSec, endSec) {
+  hideReplayBar();
+  const bar = document.createElement('div');
+  bar.className = 'replay-bar';
+  bar.id = 'replay-bar';
+  bar.innerHTML = `
+    <span class="replay-bar-label">Looping: ${formatTime(startSec)} → ${formatTime(endSec)}</span>
+    <div class="replay-bar-controls">
+      <button class="btn btn-speed replay-speed-btn" data-rspeed="0.25">0.25×</button>
+      <button class="btn btn-speed replay-speed-btn" data-rspeed="0.5">0.5×</button>
+      <button class="btn btn-speed replay-speed-btn active" data-rspeed="1">1×</button>
+      <button class="btn btn-danger replay-stop-btn">Stop</button>
+    </div>
+  `;
+
+  // Insert after status bar
+  const statusBar = document.getElementById('status-bar');
+  statusBar.parentNode.insertBefore(bar, statusBar.nextSibling);
+
+  // Wire speed buttons
+  bar.querySelectorAll('.replay-speed-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      bar.querySelectorAll('.replay-speed-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const speed = parseFloat(btn.dataset.rspeed);
+      state.videos.forEach(v => { if (v.el) v.el.playbackRate = speed; });
+    });
+  });
+
+  // Wire stop button
+  bar.querySelector('.replay-stop-btn').addEventListener('click', stopReplayLoop);
+}
+
+function hideReplayBar() {
+  const bar = document.getElementById('replay-bar');
+  if (bar) bar.remove();
 }
 
 // ── Step 9b: Click-to-annotate system ────────────────────────
@@ -1062,6 +1241,7 @@ function computeVideoClickCoords(event, videoElement) {
 }
 
 function handleVideoTileClick(event, tileIndex) {
+  if (state.replayLoop) stopReplayLoop();
   if (state.clickAnnotating) return;
   const form = document.getElementById('annotation-form');
   if (form && !form.classList.contains('hidden')) return;
@@ -1083,7 +1263,7 @@ function handleVideoTileClick(event, tileIndex) {
 
   // Visual focus on clicked tile
   document.querySelectorAll('.video-tile').forEach(t => t.classList.remove('click-focused'));
-  const tile = document.querySelectorAll('.video-tile')[tileIndex];
+  const tile = document.querySelector(`.video-tile[data-video-idx="${tileIndex}"]`);
   if (tile) tile.classList.add('click-focused');
 
   // Show red X marker at click position
@@ -1172,19 +1352,19 @@ function showFrameStepperBar() {
   bar.id = 'frame-stepper-bar';
 
   bar.innerHTML = `
-    <div class="frame-stepper-hint">
-      Use ← → arrow keys to step frames, then mark start &amp; end
+    <div class="frame-stepper-hint" id="frame-stepper-hint">
+      Step 1: Use ← → to find the start frame, then press <kbd>S</kbd> to mark start
     </div>
     <div class="frame-stepper-controls">
       <button class="btn btn-secondary" id="btn-step-back" title="Step back 1 frame (←)">◀ -1f</button>
       <span class="frame-stepper-time" id="frame-stepper-time">${formatTime(state.clickSyncedMs / 1000)}</span>
       <button class="btn btn-secondary" id="btn-step-fwd" title="Step forward 1 frame (→)">+1f ▶</button>
-      <button class="btn btn-mark-start" id="btn-click-mark-start" title="Mark start (S)">Mark Start</button>
+      <button class="btn btn-mark-start" id="btn-click-mark-start" title="Mark start (S)">Mark Start <kbd>S</kbd></button>
       <span class="frame-stepper-mark" id="frame-stepper-start">Start: —</span>
-      <button class="btn btn-mark-end" id="btn-click-mark-end" title="Mark end (E)">Mark End</button>
+      <button class="btn btn-mark-end" id="btn-click-mark-end" disabled title="Mark end (E)">Mark End <kbd>E</kbd></button>
       <span class="frame-stepper-mark" id="frame-stepper-end">End: —</span>
-      <button class="btn btn-primary" id="btn-click-confirm" disabled title="Confirm range (Enter)">Confirm</button>
-      <button class="btn btn-secondary" id="btn-click-cancel" title="Cancel (Esc)">Cancel</button>
+      <button class="btn btn-primary" id="btn-click-confirm" disabled title="Confirm (Enter)">Confirm <kbd>Enter</kbd></button>
+      <button class="btn btn-secondary" id="btn-click-cancel" title="Cancel (Esc)">Cancel <kbd>Esc</kbd></button>
     </div>
   `;
 
@@ -1200,6 +1380,19 @@ function showFrameStepperBar() {
   document.getElementById('btn-click-cancel').addEventListener('click', cancelClickAnnotation);
 }
 
+function clickAnnotateTogglePlay() {
+  const videos = state.videos.map(v => v.el).filter(Boolean);
+  const anyPlaying = videos.some(v => !v.paused);
+  if (anyPlaying) {
+    videos.forEach(v => v.pause());
+    document.getElementById('btn-play').textContent = 'Play';
+  } else {
+    // Resume at 0.5x
+    videos.forEach(v => { v.playbackRate = 0.5; });
+    syncedPlay(videos);
+  }
+}
+
 function clickAnnotateStepFrame(direction) {
   const FRAME_STEP = 1 / 60; // ~16.67ms per frame at 60fps
   const syncedSec = getSyncedTime() + direction * FRAME_STEP;
@@ -1208,6 +1401,21 @@ function clickAnnotateStepFrame(direction) {
   // Update current time display in stepper
   const timeEl = document.getElementById('frame-stepper-time');
   if (timeEl) timeEl.textContent = formatTime(clamped);
+
+  // If end is already marked, update it as user fine-tunes
+  if (state.pendingEnd !== null) {
+    state.pendingEnd = clamped * 1000;
+    const el = document.getElementById('frame-stepper-end');
+    if (el) el.textContent = 'End: ' + formatTime(clamped);
+    // Auto-swap if end < start
+    if (state.pendingStart !== null && state.pendingEnd < state.pendingStart) {
+      [state.pendingStart, state.pendingEnd] = [state.pendingEnd, state.pendingStart];
+      const startEl = document.getElementById('frame-stepper-start');
+      if (startEl) startEl.textContent = 'Start: ' + formatTime(state.pendingStart / 1000);
+      const endEl = document.getElementById('frame-stepper-end');
+      if (endEl) endEl.textContent = 'End: ' + formatTime(state.pendingEnd / 1000);
+    }
+  }
 }
 
 function clickAnnotateMarkStart() {
@@ -1215,10 +1423,28 @@ function clickAnnotateMarkStart() {
   const el = document.getElementById('frame-stepper-start');
   if (el) el.textContent = 'Start: ' + formatTime(state.pendingStart / 1000);
   document.getElementById('btn-click-mark-start')?.classList.add('active');
+
+  // Enable Mark End button
+  const endBtn = document.getElementById('btn-click-mark-end');
+  if (endBtn) endBtn.disabled = false;
+
+  // Update hint
+  const hint = document.getElementById('frame-stepper-hint');
+  if (hint) hint.innerHTML = 'Step 2: Playing at 0.5x — press <kbd>E</kbd> to mark end, <kbd>Space</kbd> to pause/resume';
+
+  // Start playing at 0.5x speed
+  state.videos.forEach(v => { if (v.el) v.el.playbackRate = 0.5; });
+  const videos = state.videos.map(v => v.el).filter(Boolean);
+  syncedPlay(videos);
+
   updateClickConfirmButton();
 }
 
 function clickAnnotateMarkEnd() {
+  // Pause all videos
+  state.videos.forEach(v => { if (v.el) v.el.pause(); });
+  document.getElementById('btn-play').textContent = 'Play';
+
   state.pendingEnd = getSyncedTime() * 1000;
   // Auto-swap if end < start
   if (state.pendingStart !== null && state.pendingEnd < state.pendingStart) {
@@ -1229,6 +1455,11 @@ function clickAnnotateMarkEnd() {
   const el = document.getElementById('frame-stepper-end');
   if (el) el.textContent = 'End: ' + formatTime(state.pendingEnd / 1000);
   document.getElementById('btn-click-mark-end')?.classList.add('active');
+
+  // Update hint
+  const hint = document.getElementById('frame-stepper-hint');
+  if (hint) hint.innerHTML = 'Step 3: Use ← → to fine-tune end frame, then press <kbd>Enter</kbd> to confirm';
+
   updateClickConfirmButton();
 }
 
@@ -1259,6 +1490,11 @@ function cancelClickAnnotation() {
   state.pendingStart = null;
   state.pendingEnd = null;
   document.querySelectorAll('.video-tile').forEach(t => t.classList.remove('click-focused'));
+
+  // Restore playback rate to whatever speed button is active
+  const activeSpeed = document.querySelector('.btn-speed.active');
+  const rate = activeSpeed ? parseFloat(activeSpeed.dataset.speed) : 1;
+  state.videos.forEach(v => { if (v.el) v.el.playbackRate = rate; });
 
   // Resume playback
   setTimeout(() => {
@@ -1409,7 +1645,7 @@ async function saveToDropbox() {
   const jsonPath = `${folderPath}/${state.folderKey}_annotations.json`;
 
   // Build CSV
-  const cols = ['session','start_time','end_time','player_id','player_name','action_id','drill','perfect','notes','annotator','created_at','click_x','click_y','click_video'];
+  const cols = ['session','start_time','end_time','player_id','player_name','action_id','drill','perfect','notes','annotator','created_at','click_x','click_y','click_time','click_video'];
   const rows = [cols.join(',')];
   state.annotations.forEach(a => {
     rows.push(cols.map(c => csvEscape(String(a[c] ?? ''))).join(','));

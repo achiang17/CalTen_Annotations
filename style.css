@@ -659,6 +659,34 @@ input[type="range"] {
   flex-shrink: 0;
 }
 
+.annotation-mode-hint {
+  font-size: 11px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.annotation-mode-hint kbd {
+  display: inline-block;
+  padding: 0 4px;
+  font-size: 10px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+}
+
+.mode-label {
+  font-weight: 600;
+}
+
+.mode-label.mode-stroke {
+  color: var(--color-accent);
+}
+
+.mode-label.mode-drill {
+  color: #7c3aed;
+}
+
 .mark-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -802,6 +830,65 @@ input[type="range"] {
   color: #166534;
   margin-left: 4px;
   text-transform: uppercase;
+}
+
+.annotation-row-clicktime {
+  color: var(--color-accent);
+  font-weight: 500;
+  margin-left: 6px;
+}
+
+/* Annotation replay loop */
+.annotation-row {
+  cursor: pointer;
+}
+.annotation-row.replay-active {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.replay-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #1e293b;
+  color: #fff;
+  border-radius: 6px;
+  margin: 4px 0;
+  font-size: 0.85rem;
+}
+.replay-bar-label {
+  font-family: monospace;
+  white-space: nowrap;
+}
+.replay-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.replay-bar-controls .replay-speed-btn {
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  background: #334155;
+  color: #e2e8f0;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.replay-bar-controls .replay-speed-btn:hover {
+  background: #475569;
+}
+.replay-bar-controls .replay-speed-btn.active {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.replay-bar-controls .replay-stop-btn {
+  padding: 3px 12px;
+  font-size: 0.8rem;
 }
 
 .annotation-row-annotator {
@@ -1016,6 +1103,18 @@ input[type="range"] {
   font-family: "SF Mono", "Fira Code", "Consolas", monospace;
   color: var(--color-muted);
   min-width: 130px;
+}
+
+.frame-stepper-hint kbd,
+.frame-stepper-controls kbd {
+  display: inline-block;
+  padding: 0 4px;
+  font-size: 10px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  background: rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  margin-left: 4px;
 }
 
 /* ============================================================
