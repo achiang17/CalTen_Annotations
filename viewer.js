@@ -204,7 +204,7 @@ function loadViewerRoster(team) {
   const offsets = calcOffsets(parsed);
   state.videos = parsed.map((v, i) => ({ ...v, offsetMs: offsets[i], calibrationMs: 0 }));
   state.refIdx = offsets.indexOf(0);
-  state.t0WallClockTime = formatWallClockMs(parsed[state.refIdx].wallClockMs);
+  updateT0WallClockTime();
 
   // Load saved calibration if present
   const calibrationFile = folderEntries
@@ -220,6 +220,7 @@ function loadViewerRoster(team) {
             v.calibrationMs = calData.calibration[v.filename];
           }
         });
+        updateT0WallClockTime();
         state.calibrationLoaded = true;
       }
     } catch (err) {
@@ -289,6 +290,11 @@ function calcOffsets(parsedVideos) {
 /** Total offset for a video: parsed offset + manual calibration adjustment. */
 function totalOffsetSec(v) {
   return (v.offsetMs + v.calibrationMs) / 1000;
+}
+
+function updateT0WallClockTime() {
+  const ref = state.videos[state.refIdx];
+  state.t0WallClockTime = ref ? formatWallClockMs(ref.wallClockMs + ref.calibrationMs) : '';
 }
 
 // ── Step 4 / 5: Build video grid ────────────────────────────
@@ -820,6 +826,7 @@ function hideCalibration() {
   }
 
   // Recompute synced duration with new calibration offsets
+  updateT0WallClockTime();
   computeSyncedDuration();
   seekAll(0);
 
@@ -858,6 +865,7 @@ async function saveCalibrationToDropbox() {
   const data = JSON.stringify({
     session: state.folderKey,
     saved_at: new Date().toISOString(),
+    t0_wall_clock_time: state.t0WallClockTime,
     calibration: calibration,
   }, null, 2);
 
@@ -981,7 +989,6 @@ function confirmAnnotation() {
     perfect:     perfect,
     notes:       notes,
     annotator:   state.annotator,
-    t0_wall_clock_time: state.t0WallClockTime,
     created_at:  new Date().toISOString().replace(/\.\d{3}Z$/, ''),
     session:     state.folderKey,
   };
@@ -1673,15 +1680,17 @@ async function saveToDropbox() {
   // Build JSON (canonical format — this file gets auto-loaded next time)
   const jsonData = {
     session: state.folderKey,
-    t0_wall_clock_time: state.t0WallClockTime,
     exported_at: new Date().toISOString(),
-    annotations: state.annotations,
+    annotations: state.annotations.map(annotation => {
+      const { t0_wall_clock_time, ...annotationWithoutT0 } = annotation;
+      return annotationWithoutT0;
+    }),
   };
   const jsonContent = JSON.stringify(jsonData, null, 2);
   const jsonPath = `${folderPath}/${state.folderKey}_annotations.json`;
 
   // Build CSV
-  const cols = ['session','t0_wall_clock_time','start_time','end_time','player_id','player_name','action_id','drill','perfect','notes','annotator','created_at','click_x','click_y','click_time','click_video'];
+  const cols = ['session','start_time','end_time','player_id','player_name','action_id','drill','perfect','notes','annotator','created_at','click_x','click_y','click_time','click_video'];
   const rows = [cols.join(',')];
   state.annotations.forEach(a => {
     rows.push(cols.map(c => csvEscape(String(a[c] ?? ''))).join(','));
