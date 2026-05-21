@@ -12,6 +12,7 @@ const state = {
   players:         {},   // { P1: 'Rafael Nadal', … }
   videos:          [],   // [{ camKey, url, wallClockMs, offsetMs, el }]
   refIdx:          0,    // index of the reference (latest-starting) video
+  t0WallClockTime: '',   // wall clock time corresponding to synced t = 0
   syncedDuration:  0,    // synced timeline length in seconds
   isSeeking:       false,
   calibrating:     false,
@@ -146,9 +147,18 @@ function loadViewerRoster(team) {
     return;
   }
 
-  // Find .MOV video files only
-  const videoFiles = folderEntries
-    .filter(e => e['.tag'] === 'file' && /\.mov$/i.test(e.name))
+  // Find video files — prefer _compressed.mp4 over .MOV when both exist
+  const allVideos = folderEntries
+    .filter(e => e['.tag'] === 'file' && /\.(mov|mp4)$/i.test(e.name));
+  const byBase = {};
+  allVideos.forEach(vf => {
+    const base = vf.name.replace(/(_compressed)?\.(mov|mp4)$/i, '');
+    if (!byBase[base]) byBase[base] = {};
+    if (/\.mp4$/i.test(vf.name)) byBase[base].mp4 = vf;
+    else byBase[base].mov = vf;
+  });
+  const videoFiles = Object.values(byBase)
+    .map(g => g.mp4 || g.mov)
     .sort((a, b) => a.name.localeCompare(b.name));
 
   if (videoFiles.length === 0) {
@@ -194,6 +204,7 @@ function loadViewerRoster(team) {
   const offsets = calcOffsets(parsed);
   state.videos = parsed.map((v, i) => ({ ...v, offsetMs: offsets[i], calibrationMs: 0 }));
   state.refIdx = offsets.indexOf(0);
+  state.t0WallClockTime = formatWallClockMs(parsed[state.refIdx].wallClockMs);
 
   // Load saved calibration if present
   const calibrationFile = folderEntries
@@ -237,7 +248,7 @@ function parseFilename(filenameOrUrl) {
   // Handle both raw filenames and URLs
   const withoutQuery = filenameOrUrl.split('?')[0];
   const filename = withoutQuery.split('/').pop();
-  const base = filename.replace(/\.MOV$/i, '');
+  const base = filename.replace(/(_compressed)?\.(mov|mp4)$/i, '');
   const parts = base.split('_');
 
   // indices: 0=MM 1=DD 2=YYYY 3=HH 4=MM 5=SS 6=ms 7=courtNum 8=direction
@@ -405,6 +416,17 @@ function seekAll(syncedSec) {
   setTimeout(() => { state.isSeeking = false; }, 50);
 }
 
+/** Seek relative to the current synced position, clamped to session bounds. */
+function seekRelative(deltaSec) {
+  const videos = state.videos.map(v => v.el).filter(Boolean);
+  const wasPlaying = videos.some(v => !v.paused);
+  const target = Math.max(0, Math.min(getSyncedTime() + deltaSec, state.syncedDuration));
+  seekAll(target);
+  if (wasPlaying) {
+    setTimeout(() => syncedPlay(videos), 100);
+  }
+}
+
 /** Format seconds → HH:MM:SS.mmm */
 function formatTime(sec) {
   const totalMs = Math.round(sec * 1000);
@@ -417,6 +439,16 @@ function formatTime(sec) {
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 function pad3(n) { return String(n).padStart(3, '0'); }
+
+function formatWallClockMs(totalMs) {
+  const msInDay = 24 * 60 * 60 * 1000;
+  const normalizedMs = ((Math.round(totalMs) % msInDay) + msInDay) % msInDay;
+  const ms  = normalizedMs % 1000;
+  const s   = Math.floor(normalizedMs / 1000) % 60;
+  const m   = Math.floor(normalizedMs / 60000) % 60;
+  const h   = Math.floor(normalizedMs / 3600000);
+  return `${pad2(h)}:${pad2(m)}:${pad2(s)}.${pad3(ms)}`;
+}
 
 function updateTimeDisplay(syncedSec) {
   document.getElementById('time-display').textContent = formatTime(syncedSec);
@@ -567,6 +599,8 @@ function wireControls() {
     }
     if (e.key === 's' || e.key === 'S') markStart();
     if (e.key === 'e' || e.key === 'E') markEnd();
+    if (e.key === 'ArrowLeft') { e.preventDefault(); seekRelative(-5); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); seekRelative(5); }
     if (e.key === ' ') { e.preventDefault(); togglePlay(); }
   });
 
@@ -947,6 +981,7 @@ function confirmAnnotation() {
     perfect:     perfect,
     notes:       notes,
     annotator:   state.annotator,
+    t0_wall_clock_time: state.t0WallClockTime,
     created_at:  new Date().toISOString().replace(/\.\d{3}Z$/, ''),
     session:     state.folderKey,
   };
@@ -1638,6 +1673,7 @@ async function saveToDropbox() {
   // Build JSON (canonical format — this file gets auto-loaded next time)
   const jsonData = {
     session: state.folderKey,
+    t0_wall_clock_time: state.t0WallClockTime,
     exported_at: new Date().toISOString(),
     annotations: state.annotations,
   };
@@ -1645,7 +1681,7 @@ async function saveToDropbox() {
   const jsonPath = `${folderPath}/${state.folderKey}_annotations.json`;
 
   // Build CSV
-  const cols = ['session','start_time','end_time','player_id','player_name','action_id','drill','perfect','notes','annotator','created_at','click_x','click_y','click_time','click_video'];
+  const cols = ['session','t0_wall_clock_time','start_time','end_time','player_id','player_name','action_id','drill','perfect','notes','annotator','created_at','click_x','click_y','click_time','click_video'];
   const rows = [cols.join(',')];
   state.annotations.forEach(a => {
     rows.push(cols.map(c => csvEscape(String(a[c] ?? ''))).join(','));
